@@ -21,7 +21,7 @@ import java.util.Map;
  * 2. Tìm thấy @RestController trên class này
  * 3. Đăng ký nó như một Spring Bean trong ApplicationContext
  * 4. Map các @GetMapping URL vào các method tương ứng
- */
+ */ 
 @RestController
 public class HelloController {
 
