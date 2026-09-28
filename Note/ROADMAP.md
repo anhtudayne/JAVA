@@ -511,11 +511,11 @@ graph LR
 ## 📘 Bài 3: Bean Lifecycle, Bean Scope & Cấu Hình Nâng Cao
 
 ### 🎯 Mục tiêu bài học
-- [ ] Hiểu vòng đời (Lifecycle) của một Spring Bean từ tạo đến hủy
-- [ ] Phân biệt các Bean Scope: Singleton, Prototype, Request, Session
-- [ ] Biết cách dùng `@Configuration` + `@Bean` để đăng ký bean thủ công
-- [ ] Hiểu `@Qualifier`, `@Primary` khi có nhiều bean cùng kiểu
-- [ ] Hiểu `@Value` và file `application.properties` / `application.yml`
+- [x] Hiểu vòng đời (Lifecycle) của một Spring Bean từ tạo đến hủy
+- [x] Phân biệt các Bean Scope: Singleton, Prototype, Request, Session
+- [x] Biết cách dùng `@Configuration` + `@Bean` để đăng ký bean thủ công
+- [x] Hiểu `@Qualifier`, `@Primary` khi có nhiều bean cùng kiểu
+- [x] Hiểu `@Value` và file `application.properties` / `application.yml`
 
 ### 📖 Nội dung lý thuyết
 
@@ -729,10 +729,10 @@ public class LogController {
 ## 📘 Bài 4: Spring MVC Architecture & Request Lifecycle
 
 ### 🎯 Mục tiêu bài học
-- [ ] Hiểu kiến trúc Spring MVC và vai trò của DispatcherServlet
-- [ ] Nắm rõ luồng xử lý một HTTP Request từ đầu đến cuối
-- [ ] Phân biệt `@Controller` vs `@RestController`
-- [ ] Hiểu và sử dụng thành thạo các HTTP Method Mapping
+- [x] Hiểu kiến trúc Spring MVC và vai trò của DispatcherServlet
+- [x] Nắm rõ luồng xử lý một HTTP Request từ đầu đến cuối
+- [x] Phân biệt `@Controller` vs `@RestController`
+- [x] Hiểu và sử dụng thành thạo các HTTP Method Mapping
 
 ### 📖 Nội dung lý thuyết
 
