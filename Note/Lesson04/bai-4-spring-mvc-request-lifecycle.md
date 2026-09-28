@@ -10,8 +10,8 @@
 
 | Phần | Nội dung | Trọng tâm |
 |:---:|:---|:---|
-| 1 | Kiến trúc Spring MVC tổng quan | DispatcherServlet, Front Controller Pattern |
-| 2 | Luồng xử lý một HTTP Request (9 bước) | Từ trình duyệt → Controller → JSON response |
+| 1 | Kiến trúc Spring MVC tổng quan | Tomcat ↔ Spring MVC, DispatcherServlet, IoC Container |
+| 2 | Hai giai đoạn: Startup & Runtime | Đăng ký URL Registry + Xử lý HTTP Request 9 bước |
 | 3 | `@Controller` vs `@RestController` | Lịch sử, bên trong mã nguồn, khi nào dùng |
 | 4 | HTTP Methods & Mapping Annotations | GET / POST / PUT / PATCH / DELETE + Idempotent |
 | 5 | 4 Annotation nhận dữ liệu từ Request | `@PathVariable`, `@RequestParam`, `@RequestBody`, `@RequestHeader` |
@@ -33,7 +33,49 @@
 | **View** | Giao diện trả về cho người dùng | JSON response (REST API) hoặc HTML template (Thymeleaf) |
 | **Controller** | Tiếp nhận request, gọi Model xử lý, trả View | Class `@RestController` |
 
-### 1.2. DispatcherServlet — "Lễ tân" của Spring MVC
+### 1.2. 🔑 Hai tầng phối hợp: Tomcat & Spring MVC
+
+Bản thân code Java hay Spring MVC **không tự mình lắng nghe kết nối mạng (TCP/IP)** hay đọc các chuỗi văn bản thô của giao thức HTTP được. Do đó, hệ thống chia làm **2 tầng phối hợp** với nhau thông qua một "cầu nối" tên là `DispatcherServlet`:
+
+```mermaid
+graph LR
+    subgraph Tomcat ["🐱 TẦNG 1 — Tomcat (Web Server / Servlet Container)"]
+        direction TB
+        Port["Mở cổng mạng Port 8080"]
+        TCP["Quản lý kết nối TCP"]
+        Parse["Đọc raw bytes từ mạng"]
+        Wrap["Gom thành HttpServletRequest<br/>+ HttpServletResponse"]
+        Port --> TCP --> Parse --> Wrap
+    end
+    
+    subgraph SpringMVC ["🌐 TẦNG 2 — Spring MVC (spring-webmvc)"]
+        direction TB
+        DS["DispatcherServlet<br/>(Front Controller)"]
+        Route["Tìm đúng @RestController"]
+        Exec["Gọi method, truyền tham số"]
+        Convert["Jackson: Object → JSON"]
+        DS --> Route --> Exec --> Convert
+    end
+    
+    Wrap -->|"HttpServletRequest<br/>HttpServletResponse"| DS
+    Convert -->|"Ghi kết quả vào<br/>HttpServletResponse"| Tomcat
+    
+    style Tomcat fill:#607D8B,color:#fff
+    style SpringMVC fill:#1565C0,color:#fff
+```
+
+| | 🐱 **Tomcat** (Tầng Hạ tầng) | 🌐 **Spring MVC** (Tầng Ứng dụng) |
+|:---|:---|:---|
+| **Vai trò** | "Bộ phận lễ tân & bảo vệ tòa nhà" | "Ban điều phối chuyên môn bên trong" |
+| **Làm gì?** | Mở cổng mạng (port 8080), quản lý kết nối TCP, đọc raw bytes từ mạng, gom thành 2 đối tượng chuẩn Java: `HttpServletRequest` (chứa thông tin gửi lên) + `HttpServletResponse` (tờ giấy trắng để ghi kết quả trả về) | Nhận `HttpServletRequest` từ tay Tomcat, dịch dữ liệu thành Object Java quen thuộc, gọi đúng hàm trong `@RestController`, rồi ghi kết quả vào `HttpServletResponse` để trả lại cho Tomcat gửi về Client |
+| **Biết gì?** | Chỉ biết TCP/IP, HTTP protocol, raw bytes | Biết URL mapping, Controller, JSON, DI, Business logic |
+| **Không biết gì?** | Không biết `@GetMapping`, `ProductService`, Jackson là gì | Không biết mở socket, đọc TCP byte stream |
+
+> [!IMPORTANT]
+> **Tomcat và Spring MVC phối hợp qua chuẩn Servlet API (`javax.servlet` / `jakarta.servlet`).**
+> Tomcat tuân thủ Servlet API để tạo `HttpServletRequest` / `HttpServletResponse`. Spring MVC implement một Servlet đặc biệt là `DispatcherServlet` — chiếc cầu nối duy nhất giữa 2 tầng. Khi Tomcat nhận request xong, nó gọi `DispatcherServlet.service(request, response)` và từ đó quyền kiểm soát chuyển sang Spring MVC.
+
+### 1.3. DispatcherServlet — "Lễ tân" của Spring MVC
 
 `DispatcherServlet` là **trung tâm thần kinh** (Front Controller) của toàn bộ Spring MVC. **Mọi HTTP request** đều phải đi qua nó trước.
 
@@ -46,12 +88,12 @@
 >
 > Khách (Client) không bao giờ tự đi tìm nhân viên. Khách chỉ gặp lễ tân → lễ tân tra sổ → lễ tân gọi đúng người → người đó xử lý xong → lễ tân dịch và trả kết quả cho khách.
 
-### 1.3. Sơ đồ kiến trúc chi tiết
+### 1.4. Sơ đồ kiến trúc chi tiết
 
 ```mermaid
 graph TD
     Client["🌐 Client<br/>(Browser / Postman / Mobile App)"]
-    TomcatIcon["🐱 Tomcat (Embedded Server)<br/>Nhận raw HTTP request"]
+    TomcatIcon["🐱 Tomcat (Embedded Server)<br/>Nhận raw HTTP request<br/>Tạo HttpServletRequest/Response"]
     DS["📋 DispatcherServlet<br/>(Front Controller)<br/>Điều phối trung tâm"]
     HM["🗺️ HandlerMapping<br/>Tìm Controller + Method<br/>phù hợp dựa trên URL + HTTP Method"]
     HA["⚙️ HandlerAdapter<br/>Gọi method trong Controller<br/>+ xử lý tham số (@PathVariable, @RequestBody...)"]
@@ -60,8 +102,8 @@ graph TD
     Repo["🗄️ Repository<br/>@Repository<br/>Truy cập dữ liệu"]
     MC["🔄 HttpMessageConverter<br/>(Jackson ObjectMapper)<br/>Java Object ↔ JSON"]
 
-    Client -->|"1. HTTP Request"| TomcatIcon
-    TomcatIcon -->|"2. Chuyển tiếp"| DS
+    Client -->|"1. HTTP Request (raw bytes)"| TomcatIcon
+    TomcatIcon -->|"2. HttpServletRequest"| DS
     DS -->|"3. Hỏi: URL này ai xử lý?"| HM
     HM -->|"4. Trả: ProductController.getById()"| DS
     DS -->|"5. Gọi method đó"| HA
@@ -73,7 +115,8 @@ graph TD
     Controller -->|"11. Return Object"| HA
     HA -->|"12. Trả Object"| DS
     DS -->|"13. Convert Object → JSON"| MC
-    MC -->|"14. HTTP Response (JSON)"| Client
+    MC -->|"14. Ghi vào HttpServletResponse"| TomcatIcon
+    TomcatIcon -->|"15. Gửi HTTP Response bytes"| Client
 
     style DS fill:#FF5722,color:#fff
     style Controller fill:#2196F3,color:#fff
@@ -86,9 +129,114 @@ graph TD
 > [!NOTE]
 > **Tomcat được nhúng sẵn (Embedded) trong Spring Boot.** Bạn không cần cài Tomcat riêng. Khi chạy `./mvnw spring-boot:run`, Spring Boot tự động khởi động Tomcat bên trong, và tự động đăng ký DispatcherServlet để xử lý mọi request.
 
+### 1.5. 🔑 Spring MVC sống BÊN TRONG IoC Container!
+
+Đây là điểm **rất nhiều người hiểu sai**: Spring MVC **KHÔNG phải** một hệ thống độc lập tách rời IoC Container, và nó cũng **KHÔNG thay thế** IoC Container.
+
+> 💡 **Sự thật:** Bản thân các thành phần của Spring MVC (`DispatcherServlet`, `RequestMappingHandlerMapping`, `HandlerAdapter`, `HttpMessageConverter`...) **thực chất cũng chỉ là các Spring Bean bình thường**, nằm bên trong IoC Container!
+
+```mermaid
+graph TB
+    subgraph AppContext ["🏭 Spring IoC Container (ApplicationContext)"]
+        direction TB
+        
+        subgraph MVCBeans ["🌐 Các Bean thuộc module Spring MVC<br/>(Được Auto-Configuration đăng ký tự động)"]
+            DS["DispatcherServlet<br/>(Bộ điều phối trung tâm)"]
+            HM["RequestMappingHandlerMapping<br/>(Sổ danh bạ URL → Controller)"]
+            HA["RequestMappingHandlerAdapter<br/>(Bộ kích hoạt method)"]
+            MC["HttpMessageConverter<br/>(Jackson JSON Parser)"]
+        end
+        
+        subgraph AppBeans ["📦 Các Bean do bạn viết trong Project"]
+            PC["ProductController (@RestController)"]
+            PS["ProductService (@Service)"]
+            PR["ProductRepository (@Repository)"]
+        end
+        
+        DS --> HM
+        DS --> HA
+        HA --> PC
+        PC --> PS
+        PS --> PR
+    end
+
+    Client["🌐 Client<br/>(Postman/Browser)"] -->|"HTTP Request"| DS
+    DS -->|"HTTP Response (JSON)"| Client
+```
+
+**Điều này có nghĩa là:**
+
+| Câu hỏi | Trả lời |
+|:---|:---|
+| Spring MVC có cần IoC Container không? | ✅ **Có!** Spring MVC là một module phụ thuộc vào IoC Container. Nó dùng IoC để tìm Controller, inject dependency, quản lý lifecycle. |
+| IoC Container có cần Spring MVC không? | ❌ **Không!** Nếu bạn viết Console App, Batch Job, Microservice không có HTTP → IoC Container vẫn chạy ngon lành, chỉ là bên trong không có các Bean MVC. |
+| Khi nào Spring MVC xuất hiện? | Khi project có dependency `spring-boot-starter-web`, cơ chế **Auto-Configuration** của Spring Boot tự động đăng ký các Bean MVC vào IoC Container. |
+
+### 1.6. 🏨 Ví von đời thực — Bảng tổng hợp
+
+| Khái niệm | Ví von đời thực | Vai trò |
+|:---|:---|:---|
+| **Spring IoC Container** | 🏢 **Phòng Quản Lý Nhân Sự** | Tuyển dụng, tạo lập, trả lương và quản lý tất cả nhân viên (Bean) trong công ty |
+| **Tomcat** | 🚪 **Bảo vệ + Cổng ra vào tòa nhà** | Mở cổng, kiểm soát ai vào/ra, dẫn khách vào quầy lễ tân |
+| **Spring MVC (`DispatcherServlet`)** | 💁 **Quầy Lễ Tân & Điều Phối Khách** | Đứng ở sảnh đón khách (HTTP Request), hỏi khách muốn làm gì rồi dẫn tới đúng nhân viên phụ trách |
+| **`@RestController`** | 🪪 **Thẻ Đeo "Giao Dịch Viên"** | Nhân viên nào đeo thẻ này thì Lễ Tân mới dẫn khách vào gặp trực tiếp |
+| **`@Service`, `@Repository`** | 👷 **Nhân viên Kỹ Thuật, Kế Toán (Hậu cần)** | Cũng là nhân viên do Nhân Sự quản lý, nhưng không đeo thẻ "Giao Dịch Viên" → khách hàng không được gặp trực tiếp, chỉ làm việc thông qua Giao dịch viên |
+| **`HandlerMapping`** | 📒 **Sổ phân công nội bộ** | Ghi rõ: "Khách hỏi về sản phẩm → gặp anh A; Khách hỏi về đơn hàng → gặp chị B" |
+
 ---
 
-## PHẦN 2: LUỒNG XỬ LÝ MỘT HTTP REQUEST (9 BƯỚC CHI TIẾT)
+## PHẦN 2: HAI GIAI ĐOẠN — STARTUP & RUNTIME
+
+Hệ thống Spring MVC hoạt động qua **2 giai đoạn** rõ ràng: giai đoạn khởi động (đăng ký) và giai đoạn runtime (xử lý request).
+
+### 2.1. 🔹 Giai đoạn 1: Khi khởi động ứng dụng (Startup) — Đăng ký URL Registry
+
+Khi bạn chạy `./mvnw spring-boot:run`, đây là những gì xảy ra:
+
+```mermaid
+sequenceDiagram
+    participant IoC as 🏭 Spring IoC Container
+    participant Bean as ProductController
+    participant MVC as 🗺️ RequestMappingHandlerMapping<br/>(Spring MVC)
+
+    IoC->>Bean: 1. Phát hiện @RestController → new ProductController() đưa vào IoC
+    IoC->>MVC: 2. Khởi tạo bean RequestMappingHandlerMapping
+    Note over MVC: 3. Quét toàn bộ Bean trong IoC Container<br/>để tìm Bean nào có @Controller / @RestController
+    MVC->>Bean: 4. Soi method: @GetMapping("/api/v1/products")
+    MVC->>MVC: 5. Ghi vào "Sổ danh bạ" (Registry):<br/>"GET /api/v1/products" → ProductController.getAllProducts()
+```
+
+**Diễn giải chi tiết:**
+
+| Bước | Ai thực hiện? | Việc gì xảy ra? |
+|:---:|:---|:---|
+| 1 | **IoC Container** | Quét qua dự án, thấy class `ProductController` có `@RestController` → khởi tạo 1 instance, inject các dependency (`ProductService`) → giữ trong container |
+| 2 | **IoC Container** | Khởi tạo bean `RequestMappingHandlerMapping` — đây là một bean của Spring MVC, cũng nằm trong IoC Container |
+| 3 | **HandlerMapping** | Đi một vòng quanh IoC Container, hỏi: *"Có Bean nào gắn `@Controller` hoặc `@RestController` không?"* |
+| 4 | **HandlerMapping** | Thấy `ProductController`! Lập tức "soi" các method bên trong: `@GetMapping`, `@PostMapping`, `@PutMapping`... |
+| 5 | **HandlerMapping** | Tạo thành **bảng tra cứu (Routing Table / Handler Mapping Registry)** |
+
+**Routing Table sau khi startup hoàn tất (ví dụ thực tế từ project của bạn):**
+
+| HTTP Method + URL Pattern | → Controller.Method |
+|:---|:---|
+| `GET /api/v1/products` | → `ProductController.getAllProducts()` |
+| `GET /api/v1/products/{id}` | → `ProductController.getProductById(Long)` |
+| `GET /api/v1/products/search` | → `ProductController.searchProducts(String)` |
+| `POST /api/v1/products` | → `ProductController.createProduct(Product)` |
+| `PUT /api/v1/products/{id}` | → `ProductController.updateProduct(Long, Product)` |
+| `PATCH /api/v1/products/{id}` | → `ProductController.patchProduct(Long, Map)` |
+| `DELETE /api/v1/products/{id}` | → `ProductController.deleteProduct(Long)` |
+
+> [!WARNING]
+> **Nếu bạn bỏ `@RestController` (hoặc chỉ để `@Service`):**
+> IoC Container vẫn tạo Bean đó bình thường, **nhưng Spring MVC sẽ lờ nó đi!** Khi Client gọi `GET /api/v1/products`, Spring MVC tra sổ danh bạ không thấy mapping nào ➡️ trả về lỗi **`404 Not Found`**.
+>
+> **Ngược lại**, nếu bạn gắn `@RestController` nhưng không có `spring-boot-starter-web` trong `pom.xml` → không có Spring MVC → không có ai "soi" các `@GetMapping` → các annotation trở thành vô nghĩa, ứng dụng chạy như Console App.
+
+---
+
+### 2.2. 🔹 Giai đoạn 2: Khi có HTTP Request gửi đến (Runtime)
 
 Khi bạn gõ URL `http://localhost:8080/api/products/42` trong trình duyệt và nhấn Enter, đây là **toàn bộ hành trình** mà request đi qua:
 
@@ -103,20 +251,21 @@ sequenceDiagram
     participant Svc as 🧠 Service
     participant J as 🔄 Jackson
 
-    C->>T: ① GET /api/products/42
-    T->>D: ② Forward request
-    D->>HM: ③ URL này ai xử lý?
-    HM-->>D: ④ ProductController.getById(42)
-    D->>HA: ⑤ Gọi method đó, parse @PathVariable
-    HA->>Ctrl: ⑥ getById(42L)
-    Ctrl->>Svc: ⑦ findById(42L)
-    Svc-->>Ctrl: ⑧ return Product object
-    Ctrl-->>HA: ⑨ return Product object
+    C->>T: ① GET /api/products/42 (raw HTTP bytes)
+    T->>T: ② Parse bytes → HttpServletRequest + HttpServletResponse
+    T->>D: ③ Gọi DispatcherServlet.service(request, response)
+    D->>HM: ④ URL này ai xử lý?
+    HM-->>D: ⑤ ProductController.getById(42) (tra Routing Table)
+    D->>HA: ⑥ Gọi method đó, parse @PathVariable
+    HA->>Ctrl: ⑦ getById(42L)
+    Ctrl->>Svc: ⑧ findById(42L)
+    Svc-->>Ctrl: ⑨ return Product object
+    Ctrl-->>HA: return Product object
     HA-->>D: return Product object
-    D->>J: Convert Product → JSON
+    D->>J: Convert Product → JSON (@ResponseBody)
     J-->>D: {"id":42, "name":"Laptop"...}
-    D-->>T: HTTP 200 OK + JSON body
-    T-->>C: ⑨ Response hiển thị trên trình duyệt
+    D-->>T: Ghi JSON vào HttpServletResponse
+    T-->>C: ⑨ HTTP 200 OK + JSON body → hiển thị trên trình duyệt
 ```
 
 ### Bảng giải thích từng bước
@@ -124,19 +273,28 @@ sequenceDiagram
 | Bước | Ai làm? | Việc gì xảy ra? |
 |:---:|:---|:---|
 | ① | **Client** | Gửi `GET /api/products/42` (kèm headers, cookies...) |
-| ② | **Tomcat** | Nhận raw HTTP bytes, parse thành `HttpServletRequest` object |
-| ③ | **DispatcherServlet** | Hỏi HandlerMapping: "URL `/api/products/42` + method `GET` thì chạy method nào?" |
-| ④ | **HandlerMapping** | Quét tất cả `@RequestMapping`, `@GetMapping` trong các Controller → tìm ra `ProductController.getById()` match pattern `/api/products/{id}` |
-| ⑤ | **HandlerAdapter** | Parse `{id}` = `42` từ URL → chuyển thành `Long 42L` → chuẩn bị tham số gọi method |
-| ⑥ | **Controller** | Method `getById(42L)` được gọi, Controller gọi tiếp Service |
-| ⑦ | **Service** | Thực hiện business logic (validate, xử lý...), gọi Repository lấy data |
-| ⑧ | **Service → Controller** | Trả về `Product` object (Java object thuần trong RAM) |
-| ⑨ | **Jackson (HttpMessageConverter)** | Chuyển `Product` object → JSON string → đóng gói HTTP Response → gửi về Client |
+| ② | **Tomcat** | Nhận raw HTTP bytes từ mạng, parse thành đối tượng `HttpServletRequest` (chứa URL, headers, body) + `HttpServletResponse` (tờ giấy trắng để ghi kết quả) |
+| ③ | **Tomcat** | Gọi `DispatcherServlet.service(request, response)` — quyền kiểm soát chuyển sang Spring MVC |
+| ④ | **DispatcherServlet** | Hỏi `HandlerMapping`: "URL `/api/products/42` + method `GET` thì chạy method nào?" |
+| ⑤ | **HandlerMapping** | Tra **Routing Table** (đã tạo sẵn từ giai đoạn Startup) → tìm ra `ProductController.getById()` match pattern `/api/products/{id}` |
+| ⑥ | **HandlerAdapter** | Parse `{id}` = `42` từ URL → chuyển thành `Long 42L` → chuẩn bị tham số gọi method |
+| ⑦ | **Controller** | Method `getById(42L)` được gọi, Controller gọi tiếp Service |
+| ⑧ | **Service** | Thực hiện business logic (validate, xử lý...), gọi Repository lấy data |
+| ⑨ | **Jackson (HttpMessageConverter)** | Vì class gắn `@RestController` (chứa `@ResponseBody`), Spring MVC hiểu rằng: **không tìm giao diện HTML** mà đưa đối tượng `Product` cho Jackson chuyển thành chuỗi JSON → ghi vào `HttpServletResponse` → Tomcat gửi bytes về Client |
 
 > [!TIP]
 > **Jackson** là thư viện chuyển đổi Java Object ↔ JSON, được Spring Boot tích hợp sẵn. Bạn không cần cấu hình gì — cứ `return` một Java object từ Controller, Jackson sẽ tự động serialize thành JSON.
 >
 > Jackson dùng **Getter methods** để đọc giá trị từ object. Vì vậy class Model **bắt buộc phải có Getter** (hoặc dùng `@JsonProperty`).
+
+### 2.3. Tóm tắt: IoC Container vs Spring MVC — Ai trả lời câu hỏi nào?
+
+| Câu hỏi | Ai trả lời? |
+|:---|:---|
+| *"Ai tạo ra và quản lý vòng đời đối tượng?"* | 🏭 **IoC Container** |
+| *"Ai tiếp nhận HTTP từ mạng và điều hướng đến method của đối tượng?"* | 🌐 **Spring MVC** |
+| *"Ai đọc raw TCP bytes và tạo HttpServletRequest?"* | 🐱 **Tomcat** |
+| *"`@RestController` nói với ai?"* | Nó nói với **cả hai**: IoC Container biết phải tạo Bean, Spring MVC biết phải đăng ký URL mapping |
 
 ---
 
@@ -331,7 +489,7 @@ graph TD
     HTTP["📨 HTTP Request"]
     URL["🔗 URL Path<br/>/api/products/42"]
     QS["❓ Query String<br/>?category=laptop&page=1"]
-    Body["📦 Request Body<br/>{\"name\":\"Laptop\",\"price\":999}"]
+    Body["📦 Request Body<br/>name: Laptop, price: 999.0"]
     Header["📋 Request Headers<br/>Authorization: Bearer xyz"]
 
     HTTP --> URL
