@@ -1,27 +1,43 @@
 package com.example.springbootlearning.dto.request;
 
+import jakarta.validation.constraints.*;
+
 /**
- * 📘 BÀI 5 — Request DTO cho POST /api/v1/products
+ * 📘 BÀI 6 — Request DTO cho POST /api/v1/products (Với Validation)
  *
- * Chỉ chứa những field mà CLIENT ĐƯỢC PHÉP gửi khi tạo sản phẩm mới.
+ * Thay đổi so với Bài 5:
+ *   ✅ Gắn Jakarta Validation annotations lên từng field
+ *   ✅ Spring MVC sẽ tự động kiểm tra khi Controller nhận @Valid @RequestBody
+ *   ✅ Nếu vi phạm → ném MethodArgumentNotValidException (không vào Controller)
  *
- * ❌ KHÔNG có: id, createdAt, updatedAt → Server tự sinh
+ * Mỗi annotation chịu trách nhiệm 1 quy tắc duy nhất:
+ *   @NotBlank  → Không rỗng, không null, không toàn khoảng trắng (chỉ String)
+ *   @Size      → Giới hạn độ dài chuỗi
+ *   @NotNull   → Không null (dùng cho kiểu số: Double, Integer)
+ *   @Positive  → Phải > 0 (nghiêm ngặt, không cho phép 0)
+ *   @PositiveOrZero → Phải >= 0
  *
- * 🔑 Tại sao cần class riêng thay vì dùng Product entity?
- *   1. Bảo mật: Client không thể ghi đè id, createdAt
- *   2. Validation riêng: Bài 6 sẽ thêm @NotBlank, @Min... trên từng field
- *   3. Tách biệt: Thay đổi Entity không ảnh hưởng API contract
- *
- * Jackson cần:
+ * Jackson vẫn cần:
  *   - No-args constructor (để tạo object)
  *   - Setter methods (để gán giá trị từ JSON)
  */
 public class ProductCreateRequest {
 
+    @NotBlank(message = "Tên sản phẩm không được để trống")
+    @Size(min = 2, max = 200, message = "Tên sản phẩm phải từ 2 đến 200 ký tự")
     private String name;
+
+    // description không bắt buộc → không cần annotation validation
     private String description;
+
+    @NotNull(message = "Giá sản phẩm không được để trống")
+    @Positive(message = "Giá sản phẩm phải lớn hơn 0")
     private Double price;
+
+    @NotBlank(message = "Danh mục sản phẩm không được để trống")
     private String category;
+
+    @PositiveOrZero(message = "Số lượng tồn kho không được âm")
     private Integer stock;
 
     // ===== Constructor mặc định — BẮT BUỘC cho Jackson =====

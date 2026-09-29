@@ -7,6 +7,7 @@ import com.example.springbootlearning.dto.response.ProductResponse;
 import com.example.springbootlearning.service.ProductService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -139,7 +140,7 @@ public class ProductController {
     //
     @PostMapping
     public ResponseEntity<ApiResponse<ProductResponse>> createProduct(
-            @RequestBody ProductCreateRequest request
+            @Valid @RequestBody ProductCreateRequest request  // 📘 BÀI 6: @Valid kích hoạt validation tự động
     ) {
         log.info("📥 POST /api/v1/products — Tạo product mới: {}", request.getName());
 
@@ -166,7 +167,7 @@ public class ProductController {
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<ProductResponse>> updateProduct(
             @PathVariable Long id,
-            @RequestBody ProductUpdateRequest request
+            @Valid @RequestBody ProductUpdateRequest request  // 📘 BÀI 6: @Valid kích hoạt validation tự động
     ) {
         log.info("📥 PUT /api/v1/products/{} — Cập nhật toàn bộ product", id);
 

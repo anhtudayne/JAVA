@@ -1,23 +1,31 @@
 package com.example.springbootlearning.dto.request;
 
+import jakarta.validation.constraints.*;
+
 /**
- * 📘 BÀI 5 — Request DTO cho PUT /api/v1/products/{id}
+ * 📘 BÀI 6 — Request DTO cho PUT /api/v1/products/{id} (Với Validation)
  *
  * Dùng cho cập nhật TOÀN BỘ sản phẩm (PUT).
- *
- * Cấu trúc giống ProductCreateRequest nhưng tách riêng vì:
- *   - PUT có thể có logic validation khác (ví dụ: không cho đổi category)
- *   - Bài 6 sẽ thêm validation annotation khác nhau
- *   - Tách biệt giúp mỗi endpoint có DTO riêng, dễ maintain
+ * Validation rules giống ProductCreateRequest vì PUT yêu cầu gửi đầy đủ fields.
  *
  * ❌ KHÔNG có: id, createdAt → Server quản lý
  */
 public class ProductUpdateRequest {
 
+    @NotBlank(message = "Tên sản phẩm không được để trống")
+    @Size(min = 2, max = 200, message = "Tên sản phẩm phải từ 2 đến 200 ký tự")
     private String name;
+
     private String description;
+
+    @NotNull(message = "Giá sản phẩm không được để trống")
+    @Positive(message = "Giá sản phẩm phải lớn hơn 0")
     private Double price;
+
+    @NotBlank(message = "Danh mục sản phẩm không được để trống")
     private String category;
+
+    @PositiveOrZero(message = "Số lượng tồn kho không được âm")
     private Integer stock;
 
     // ===== Constructor mặc định — BẮT BUỘC cho Jackson =====

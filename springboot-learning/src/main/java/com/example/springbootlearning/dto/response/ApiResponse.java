@@ -93,6 +93,18 @@ public class ApiResponse<T> {
         return new ApiResponse<>(status, message, null);
     }
 
+    /**
+     * 📘 BÀI 6 — Tạo response lỗi kèm data chi tiết.
+     *
+     * Dùng cho validation errors: data chứa Map<String, String> mô tả lỗi từng field.
+     *
+     * Ví dụ: ApiResponse.error(400, "Dữ liệu không hợp lệ", fieldErrors)
+     * → {"status":400, "message":"...", "data":{"name":"Tên không được rỗng","price":"Giá phải > 0"}}
+     */
+    public static <T> ApiResponse<T> error(int status, String message, T data) {
+        return new ApiResponse<>(status, message, data);
+    }
+
     // ===== Getters — Jackson cần để serialize Object → JSON =====
 
     public int getStatus() {

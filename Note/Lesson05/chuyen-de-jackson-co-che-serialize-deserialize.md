@@ -166,6 +166,141 @@ Jackson gọi các hàm setter này để đưa dữ liệu vào đối tượng
 
 ---
 
+### ❓ Đi sâu câu hỏi 3: Thuộc tính không có trong DTO có bị set `null` không? (Vũ khí chống Mass Assignment Attack)
+
+Đây là thắc mắc cực kỳ phổ biến: *"Nếu DTO chỉ chứa các thuộc tính cho phép (không chứa `id`, `role`, `createdAt`), vậy khi Deserialize thì các thuộc tính không có trong DTO sẽ mang giá trị gì? Có bị set `null` không?"*
+
+Để trả lời chính xác, chúng ta cần phân biệt rõ **2 tình huống hoàn toàn khác nhau**:
+
+#### 🔴 Tình huống 1: Thuộc tính HOÀN TOÀN KHÔNG ĐƯỢC KHAI BÁO trong class DTO
+*(Ví dụ: Trong Entity `Product` có các trường `id`, `createdAt`, `role`, nhưng trong [ProductCreateRequest.java](file:///Users/vovantu/HTML_CSS/JAVA%20/springboot-learning/src/main/java/com/example/springbootlearning/dto/request/ProductCreateRequest.java) ta cố tình không khai báo).*
+
+* **Bản chất trong bộ nhớ RAM:** Trong đối tượng DTO, nó **thậm chí không hề có ô nhớ nào để chứa giá trị `null` cả!**
+* Khi Jackson khởi tạo `ProductCreateRequest`, đối tượng này chỉ cấp phát ô nhớ cho đúng các biến đã khai báo (`name`, `price`, `category`, `description`, `stock`). Biến `id` hay `role` đơn giản là **không tồn tại**.
+
+> [!TIP]
+> **🛡️ Kịch bản Hacker tấn công Mass Assignment (Over-Posting Vulnerability):**
+> Giả sử một người dùng cố tình can thiệp HTTP Request để tự phong làm ADMIN hoặc tự gán ID:
+> ```json
+> {
+>   "name": "Bàn phím cơ AKKO",
+>   "price": 120.0,
+>   "role": "ADMIN",
+>   "id": 9999
+> }
+> ```
+> **Jackson sẽ làm gì?**
+> 1. Duyệt key `"name"` ➔ Gọi `setName("Bàn phím cơ AKKO")` ✅
+> 2. Duyệt key `"price"` ➔ Gọi `setPrice(120.0)` ✅
+> 3. Duyệt key `"role"` và `"id"` ➔ Soi vào `ProductCreateRequest` thấy **không có biến và không có hàm setter nào** ➔ **Jackson lập tức vứt bỏ (ignore) hoàn toàn 2 trường này!**
+> 
+> Nhờ đó, dù Client có gửi dữ liệu độc hại gì lên, hệ thống vẫn an toàn tuyệt đối ngay tại cửa ngõ Controller.
+
+#### 🔵 Tình huống 2: Thuộc tính CÓ trong DTO, nhưng Client KHÔNG GỬI lên trong JSON
+*(Ví dụ: Trong DTO có khai báo biến `description`, nhưng Client gửi JSON chỉ có `name` và `price`).*
+
+```json
+{
+  "name": "Bàn phím",
+  "price": 120.0
+}
+```
+
+* **Câu trả lời:** **ĐÚNG, thuộc tính `description` sẽ mang giá trị `null`!**
+* **Tại sao lại là `null`?**
+  1. Ở Bước 1: Jackson gọi constructor rỗng `new ProductCreateRequest()`. Mặc định trong Java, các biến đối tượng (`String`, `Double`, `Long`) khi chưa được gán giá trị sẽ nhận giá trị mặc định là **`null`** (biến nguyên thủy `int`, `boolean` sẽ là `0`, `false`).
+  2. Ở Bước 2: Vì trong chuỗi JSON **không có key `"description"`**, Jackson **không bao giờ gọi** `setDescription(...)`.
+  3. Kết quả: `description` vẫn giữ nguyên giá trị khởi tạo ban đầu là **`null`**.
+
+---
+
+### ❓ Đi sâu câu hỏi 4: Phân định 2 thế giới DTO vs Entity — Các thuộc tính còn lại (`id`, `createdAt`,...) ở đâu ra?
+
+Nếu đối tượng DTO chỉ lưu trữ vỏn vẹn `name`, `price`, vậy khi lưu xuống Cơ sở dữ liệu, một bản ghi `Product` hoàn chỉnh cần tới 10 cột dữ liệu thì **các thuộc tính còn lại đó lấy từ đâu ra và được gán khi nào?**
+
+Câu trả lời nằm ở: **Tầng Service (Business Logic) và Cơ sở dữ liệu (Database)!**
+
+```mermaid
+flowchart LR
+    subgraph ClientWorld["Thế giới bên ngoài: Client"]
+        DTO["ProductCreateRequest DTO: name: Bàn phím, price: 120.0"]
+    end
+
+    subgraph ServiceLayer["Tầng Service: Xử lý và Lắp ghép"]
+        Factory["ProductService.createProduct(): 1. Lấy name, price từ DTO 2. Tự gán các giá trị mặc định 3. Database tự cấp ID"]
+    end
+
+    subgraph DatabaseWorld["Thế giới bên trong: Database"]
+        Entity["Product Entity đầy đủ: id: 101 tự sinh, name, price từ DTO, stock: 0 mặc định, status: ACTIVE, createdAt: giờ hệ thống"]
+    end
+
+    DTO -->|"Gửi vào"| Factory
+    Factory -->|"Lắp ráp hoàn chỉnh"| Entity
+```
+
+#### 🔍 Minh chứng trực tiếp từ mã nguồn dự án:
+
+Hãy quan sát hàm `createProduct` trong file [ProductService.java](file:///Users/vovantu/HTML_CSS/JAVA%20/springboot-learning/src/main/java/com/example/springbootlearning/service/ProductService.java#L133-L147):
+
+```java
+public ProductResponse createProduct(ProductCreateRequest request) {
+    // 1. Tạo đối tượng Entity mới toanh
+    Product product = new Product();
+
+    // 2. Những gì DTO có: Ta lấy từ DTO copy sang
+    product.setName(request.getName());
+    product.setPrice(request.getPrice());
+    product.setDescription(request.getDescription());
+    product.setCategory(request.getCategory());
+
+    // 3. Những gì Client không bắt buộc: Service tự quyết định giá trị mặc định
+    product.setStock(request.getStock() != null ? request.getStock() : 0);
+
+    // 4. Lưu Entity xuống Database:
+    Product saved = productRepository.save(product);
+
+    return ProductResponse.fromEntity(saved);
+}
+```
+
+Và bên trong [ProductRepository.java](file:///Users/vovantu/HTML_CSS/JAVA%20/springboot-learning/src/main/java/com/example/springbootlearning/repository/ProductRepository.java#L46-L52), hàm `save()` thực hiện bước cấp phát cuối cùng:
+
+```java
+public Product save(Product product) {
+    // Tự sinh ID tăng dần (Database Auto Increment)
+    product.setId(idCounter.incrementAndGet()); 
+    
+    // Tự lấy thời gian thực của máy chủ (Server Timestamp)
+    product.setCreatedAt(LocalDateTime.now());
+    product.setUpdatedAt(LocalDateTime.now());
+    
+    products.add(product);
+    return product;
+}
+```
+
+#### 🌟 Ví dụ kinh điển: Chức năng Đăng ký tài khoản (User Registration)
+Sự phân tách này thể hiện rõ nhất khi làm tính năng tạo tài khoản:
+- **Client gửi lên DTO:** Chỉ có `email` và `password`.
+- **Hệ thống lắp ráp Entity trước khi lưu:**
+  - `id`: Database tự sinh (`1, 2, 3...`).
+  - `email`: Copy từ DTO.
+  - `password`: **Service mã hóa BCrypt** `passwordEncoder.encode(dto.getPassword())` (tuyệt đối không lưu raw password).
+  - `role`: **Service tự gán cứng là `"ROLE_USER"`** (ngăn chặn Client tự gửi `"role": "ROLE_ADMIN"`).
+  - `status`: **Service gán là `"PENDING_VERIFICATION"`** (chờ xác thực email).
+  - `createdAt`: Lấy `LocalDateTime.now()`.
+  - `failedLoginAttempts`: Gán mặc định bằng `0`.
+
+#### 📊 Bảng tổng kết các kịch bản dữ liệu
+
+| Kịch bản | DTO có khai báo biến không? | Client có gửi lên trong JSON không? | Giá trị trong DTO Object | Giá trị trong Entity sau khi lưu |
+| :--- | :---: | :---: | :---: | :--- |
+| **Bình thường** (`name`) | Có | Có | Giá trị Client gửi (`"Laptop"`) | Lưu giá trị từ DTO |
+| **Client bỏ trống** (`description`) | Có | **Không** | **`null`** (mặc định của Java) | Mang giá trị `null` (hoặc default do Service quy định) |
+| **Trường nhạy cảm/hệ thống** (`id`, `role`, `createdAt`) | **Không** | Cố tình gửi (`role: "ADMIN"`) | **Không tồn tại trong DTO** (Jackson bỏ qua) | Do Database hoặc Service tự quyết định (`ROLE_USER`, `now()`) |
+
+---
+
 ## 3. Quá trình 2: Serialization (Java Object ➔ JSON)
 
 Bây giờ là chiều ngược lại: Bạn có một đối tượng Java trong RAM (ví dụ: [ApiResponse](file:///Users/vovantu/HTML_CSS/JAVA%20/springboot-learning/src/main/java/com/example/springbootlearning/dto/response/ApiResponse.java) chứa dữ liệu trả về) và muốn gửi về cho Client qua giao thức HTTP.

@@ -122,9 +122,9 @@ public class ProductService {
     public ProductResponse createProduct(ProductCreateRequest request) {
         log.info("📥 Tạo product mới từ request: {}", request);
 
-        // Validation
-        validateCreateRequest(request);
-
+        // 📘 BÀI 6: Không cần validateCreateRequest() nữa!
+        // @Valid trong Controller đã tự động kiểm tra trước khi request vào được đến đây.
+        // Nếu code chạy được tới dòng này → dữ liệu CHẮC CHẮN hợp lệ rồi.
         // Kiểm tra trùng tên
         if (productRepository.existsByName(request.getName())) {
             throw new IllegalArgumentException("Sản phẩm đã tồn tại với tên: " + request.getName());
@@ -163,9 +163,7 @@ public class ProductService {
         productRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Product không tồn tại với id: " + id));
 
-        // Validation dữ liệu mới
-        validateUpdateRequest(request);
-
+        // 📘 BÀI 6: Không cần validateUpdateRequest() nữa — @Valid đã kiểm tra rồi!
         // Chuyển DTO → Entity mới
         Product updatedProduct = new Product();
         updatedProduct.setName(request.getName());
@@ -251,38 +249,6 @@ public class ProductService {
         }
     }
 
-    // ================================================================
-    // Private Helpers — Validation
-    // ================================================================
-
-    /**
-     * Validate dữ liệu từ ProductCreateRequest.
-     * Bài 6 sẽ thay thế bằng @Valid + Jakarta Validation annotations.
-     */
-    private void validateCreateRequest(ProductCreateRequest request) {
-        if (request.getName() == null || request.getName().isBlank()) {
-            throw new IllegalArgumentException("Tên sản phẩm không được để trống");
-        }
-        if (request.getPrice() == null || request.getPrice() <= 0) {
-            throw new IllegalArgumentException("Giá sản phẩm phải lớn hơn 0");
-        }
-        if (request.getCategory() == null || request.getCategory().isBlank()) {
-            throw new IllegalArgumentException("Danh mục sản phẩm không được để trống");
-        }
-    }
-
-    /**
-     * Validate dữ liệu từ ProductUpdateRequest.
-     */
-    private void validateUpdateRequest(ProductUpdateRequest request) {
-        if (request.getName() == null || request.getName().isBlank()) {
-            throw new IllegalArgumentException("Tên sản phẩm không được để trống");
-        }
-        if (request.getPrice() == null || request.getPrice() <= 0) {
-            throw new IllegalArgumentException("Giá sản phẩm phải lớn hơn 0");
-        }
-        if (request.getCategory() == null || request.getCategory().isBlank()) {
-            throw new IllegalArgumentException("Danh mục sản phẩm không được để trống");
-        }
-    }
+    // 📘 BÀI 6: Đã xóa validateCreateRequest() và validateUpdateRequest()
+    // Thay thế bằng Jakarta Bean Validation annotations trên DTO + @Valid trong Controller
 }
