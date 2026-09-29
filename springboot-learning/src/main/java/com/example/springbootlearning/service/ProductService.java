@@ -1,5 +1,8 @@
 package com.example.springbootlearning.service;
 
+import com.example.springbootlearning.dto.request.ProductCreateRequest;
+import com.example.springbootlearning.dto.request.ProductUpdateRequest;
+import com.example.springbootlearning.dto.response.ProductResponse;
 import com.example.springbootlearning.model.Product;
 import com.example.springbootlearning.repository.ProductRepository;
 import org.slf4j.Logger;
@@ -8,18 +11,22 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
- * 📘 BÀI 4 — Product Service (Tầng Business Logic)
+ * 📘 BÀI 5 — Product Service (Refactored với DTO Pattern)
  *
- * Chứa toàn bộ logic nghiệp vụ cho Product:
- * - Validation đầu vào (tên, giá, category)
- * - Kiểm tra trùng lặp
- * - Xử lý PATCH (cập nhật một phần)
- * - Logging
+ * Thay đổi so với Bài 4:
+ *   ① Nhận Request DTO (ProductCreateRequest, ProductUpdateRequest) thay vì Entity
+ *   ② Trả Response DTO (ProductResponse) thay vì Entity
+ *   ③ Chuyển đổi DTO ↔ Entity bên trong Service
  *
- * Service KHÔNG biết HTTP (không có @GetMapping, @PostMapping...)
- * Service KHÔNG truy cập data trực tiếp — ủy thác cho Repository.
+ * Luồng xử lý:
+ *   Controller → Service (nhận DTO) → chuyển sang Entity → Repository → Entity → chuyển sang DTO → Controller
+ *
+ * Service KHÔNG biết HTTP (không có ResponseEntity, @GetMapping...)
+ * Service làm việc với cả DTO (giao tiếp với Controller) và Entity (giao tiếp với Repository)
  */
 @Service
 public class ProductService {
@@ -34,143 +41,209 @@ public class ProductService {
         log.info("✅ ProductService đã được tạo — ProductRepository được inject thành công!");
     }
 
-    // ===== READ Operations =====
+    // ================================================================
+    // READ Operations — Trả về ProductResponse (DTO)
+    // ================================================================
 
     /**
-     * Lấy tất cả sản phẩm.
+     * Lấy tất cả sản phẩm → chuyển từ List<Product> sang List<ProductResponse>.
+     *
+     * Stream API pipeline:
+     *   products.stream()                     → Mở stream
+     *   .map(ProductResponse::fromEntity)     → Chuyển mỗi Product → ProductResponse
+     *   .collect(Collectors.toList())         → Thu thập kết quả vào List
+     *
+     * ProductResponse::fromEntity là Method Reference — viết gọn của:
+     *   .map(product -> ProductResponse.fromEntity(product))
      */
-    public List<Product> getAllProducts() {
+    public List<ProductResponse> getAllProducts() {
         log.debug("Lấy danh sách tất cả products");
-        return productRepository.findAll();
+        return productRepository.findAll().stream()
+                .map(ProductResponse::fromEntity)
+                .collect(Collectors.toList());
     }
 
     /**
-     * Lấy sản phẩm theo ID.
-     * Sử dụng Optional.orElseThrow() — nếu không tìm thấy sẽ throw exception.
+     * Lấy sản phẩm theo ID → trả ProductResponse.
+     * Throw RuntimeException nếu không tìm thấy (Bài 7 sẽ thay bằng custom exception).
      */
-    public Product getProductById(Long id) {
+    public ProductResponse getProductById(Long id) {
         log.debug("Tìm product với id={}", id);
-        return productRepository.findById(id)
+        Product product = productRepository.findById(id)
                 .orElseThrow(() -> {
                     log.warn("Không tìm thấy product với id={}", id);
                     return new RuntimeException("Product không tồn tại với id: " + id);
                 });
+        return ProductResponse.fromEntity(product);
     }
 
     /**
-     * Tìm kiếm sản phẩm theo keyword trong tên.
+     * Tìm kiếm sản phẩm theo keyword trong tên → trả List<ProductResponse>.
      */
-    public List<Product> searchByName(String keyword) {
+    public List<ProductResponse> searchByName(String keyword) {
         log.debug("Tìm kiếm product với keyword='{}'", keyword);
-        return productRepository.searchByName(keyword);
+        return productRepository.searchByName(keyword).stream()
+                .map(ProductResponse::fromEntity)
+                .collect(Collectors.toList());
     }
 
     /**
-     * Lọc sản phẩm theo category.
+     * Lọc sản phẩm theo category → trả List<ProductResponse>.
      */
-    public List<Product> getByCategory(String category) {
+    public List<ProductResponse> getByCategory(String category) {
         log.debug("Lọc product theo category='{}'", category);
-        return productRepository.findByCategory(category);
+        return productRepository.findByCategory(category).stream()
+                .map(ProductResponse::fromEntity)
+                .collect(Collectors.toList());
     }
 
     /**
-     * Lọc sản phẩm theo khoảng giá.
+     * Lọc sản phẩm theo khoảng giá → trả List<ProductResponse>.
      */
-    public List<Product> getByPriceRange(Double minPrice, Double maxPrice) {
+    public List<ProductResponse> getByPriceRange(Double minPrice, Double maxPrice) {
         log.debug("Lọc product theo giá [{} - {}]", minPrice, maxPrice);
-        return productRepository.findByPriceRange(minPrice, maxPrice);
+        return productRepository.findByPriceRange(minPrice, maxPrice).stream()
+                .map(ProductResponse::fromEntity)
+                .collect(Collectors.toList());
     }
 
-    // ===== CREATE Operation =====
+    // ================================================================
+    // CREATE Operation — Nhận ProductCreateRequest (DTO), trả ProductResponse (DTO)
+    // ================================================================
 
     /**
      * Tạo sản phẩm mới.
-     * Business rules:
-     *   1. Tên không được trống
-     *   2. Giá phải > 0
-     *   3. Tên không được trùng
+     *
+     * Luồng chuyển đổi:
+     *   ① ProductCreateRequest (DTO) → Product (Entity)     [copy field]
+     *   ② Product (Entity) → productRepository.save()       [lưu vào storage]
+     *   ③ Product (Entity) → ProductResponse (DTO)          [fromEntity]
      */
-    public Product createProduct(Product product) {
+    public ProductResponse createProduct(ProductCreateRequest request) {
+        log.info("📥 Tạo product mới từ request: {}", request);
+
         // Validation
-        validateProduct(product);
+        validateCreateRequest(request);
 
         // Kiểm tra trùng tên
-        if (productRepository.existsByName(product.getName())) {
-            throw new IllegalArgumentException("Sản phẩm đã tồn tại với tên: " + product.getName());
+        if (productRepository.existsByName(request.getName())) {
+            throw new IllegalArgumentException("Sản phẩm đã tồn tại với tên: " + request.getName());
         }
 
+        // ① Chuyển Request DTO → Entity
+        Product product = new Product();
+        product.setName(request.getName());
+        product.setDescription(request.getDescription());
+        product.setPrice(request.getPrice());
+        product.setCategory(request.getCategory());
+        product.setStock(request.getStock() != null ? request.getStock() : 0);
+
+        // ② Lưu Entity
         Product saved = productRepository.save(product);
         log.info("✅ Đã tạo product mới: {}", saved);
-        return saved;
+
+        // ③ Chuyển Entity → Response DTO
+        return ProductResponse.fromEntity(saved);
     }
 
-    // ===== UPDATE Operations =====
+    // ================================================================
+    // UPDATE Operations — Nhận DTO, trả DTO
+    // ================================================================
 
     /**
-     * PUT — Cập nhật TOÀN BỘ sản phẩm (replace hoàn toàn).
-     * Tất cả field phải được gửi, field không gửi sẽ thành null.
+     * PUT — Cập nhật TOÀN BỘ sản phẩm.
+     *
+     * Nhận ProductUpdateRequest (DTO) thay vì Product (Entity).
+     * → Client KHÔNG thể ghi đè id, createdAt.
      */
-    public Product updateProduct(Long id, Product updatedProduct) {
+    public ProductResponse updateProduct(Long id, ProductUpdateRequest request) {
         log.debug("PUT update product id={}", id);
 
         // Kiểm tra product tồn tại
-        getProductById(id); // Throw exception nếu không tìm thấy
+        productRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Product không tồn tại với id: " + id));
 
         // Validation dữ liệu mới
-        validateProduct(updatedProduct);
+        validateUpdateRequest(request);
 
-        return productRepository.update(id, updatedProduct)
+        // Chuyển DTO → Entity mới
+        Product updatedProduct = new Product();
+        updatedProduct.setName(request.getName());
+        updatedProduct.setDescription(request.getDescription());
+        updatedProduct.setPrice(request.getPrice());
+        updatedProduct.setCategory(request.getCategory());
+        updatedProduct.setStock(request.getStock() != null ? request.getStock() : 0);
+
+        Product saved = productRepository.update(id, updatedProduct)
                 .orElseThrow(() -> new RuntimeException("Không thể cập nhật product id: " + id));
+
+        log.info("✅ Đã PUT update product id={}: {}", id, saved);
+        return ProductResponse.fromEntity(saved);
     }
 
     /**
      * PATCH — Cập nhật MỘT PHẦN sản phẩm.
-     * Chỉ field nào client gửi (not null) mới được cập nhật.
-     * Các field không gửi → giữ nguyên giá trị cũ.
+     *
+     * Dùng Map<String, Object> để nhận chỉ những field client muốn cập nhật.
+     * Field nào không có trong Map → giữ nguyên giá trị cũ.
      */
-    public Product patchProduct(Long id, Product partialUpdate) {
+    public ProductResponse patchProduct(Long id, Map<String, Object> updates) {
         log.debug("PATCH update product id={}", id);
 
         // Lấy product hiện tại
-        Product existing = getProductById(id);
+        Product existing = productRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Product không tồn tại với id: " + id));
 
-        // Chỉ cập nhật field nào KHÔNG null trong request
-        if (partialUpdate.getName() != null) {
-            existing.setName(partialUpdate.getName());
+        // Chỉ cập nhật field CÓ TRONG map
+        if (updates.containsKey("name")) {
+            String name = (String) updates.get("name");
+            if (name == null || name.isBlank()) {
+                throw new IllegalArgumentException("Tên sản phẩm không được để trống");
+            }
+            existing.setName(name);
         }
-        if (partialUpdate.getDescription() != null) {
-            existing.setDescription(partialUpdate.getDescription());
+        if (updates.containsKey("description")) {
+            existing.setDescription((String) updates.get("description"));
         }
-        if (partialUpdate.getPrice() != null) {
-            if (partialUpdate.getPrice() <= 0) {
+        if (updates.containsKey("price")) {
+            Double price = ((Number) updates.get("price")).doubleValue();
+            if (price <= 0) {
                 throw new IllegalArgumentException("Giá sản phẩm phải lớn hơn 0");
             }
-            existing.setPrice(partialUpdate.getPrice());
+            existing.setPrice(price);
         }
-        if (partialUpdate.getCategory() != null) {
-            existing.setCategory(partialUpdate.getCategory());
+        if (updates.containsKey("category")) {
+            String category = (String) updates.get("category");
+            if (category == null || category.isBlank()) {
+                throw new IllegalArgumentException("Danh mục sản phẩm không được để trống");
+            }
+            existing.setCategory(category);
         }
-        if (partialUpdate.getStock() != null) {
-            if (partialUpdate.getStock() < 0) {
+        if (updates.containsKey("stock")) {
+            Integer stock = ((Number) updates.get("stock")).intValue();
+            if (stock < 0) {
                 throw new IllegalArgumentException("Số lượng tồn kho không được âm");
             }
-            existing.setStock(partialUpdate.getStock());
+            existing.setStock(stock);
         }
 
         existing.setUpdatedAt(LocalDateTime.now());
-
         log.info("✅ Đã PATCH product id={}: {}", id, existing);
-        return existing;
+        return ProductResponse.fromEntity(existing);
     }
 
-    // ===== DELETE Operation =====
+    // ================================================================
+    // DELETE Operation
+    // ================================================================
 
     /**
      * Xóa sản phẩm theo ID.
+     * Throw RuntimeException nếu không tìm thấy.
      */
     public void deleteProduct(Long id) {
         // Kiểm tra tồn tại trước khi xóa
-        getProductById(id);
+        productRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Product không tồn tại với id: " + id));
 
         boolean deleted = productRepository.deleteById(id);
         if (deleted) {
@@ -178,19 +251,37 @@ public class ProductService {
         }
     }
 
-    // ===== Private Helpers =====
+    // ================================================================
+    // Private Helpers — Validation
+    // ================================================================
 
     /**
-     * Validate dữ liệu product — tách thành method riêng để tái sử dụng.
+     * Validate dữ liệu từ ProductCreateRequest.
+     * Bài 6 sẽ thay thế bằng @Valid + Jakarta Validation annotations.
      */
-    private void validateProduct(Product product) {
-        if (product.getName() == null || product.getName().isBlank()) {
+    private void validateCreateRequest(ProductCreateRequest request) {
+        if (request.getName() == null || request.getName().isBlank()) {
             throw new IllegalArgumentException("Tên sản phẩm không được để trống");
         }
-        if (product.getPrice() == null || product.getPrice() <= 0) {
+        if (request.getPrice() == null || request.getPrice() <= 0) {
             throw new IllegalArgumentException("Giá sản phẩm phải lớn hơn 0");
         }
-        if (product.getCategory() == null || product.getCategory().isBlank()) {
+        if (request.getCategory() == null || request.getCategory().isBlank()) {
+            throw new IllegalArgumentException("Danh mục sản phẩm không được để trống");
+        }
+    }
+
+    /**
+     * Validate dữ liệu từ ProductUpdateRequest.
+     */
+    private void validateUpdateRequest(ProductUpdateRequest request) {
+        if (request.getName() == null || request.getName().isBlank()) {
+            throw new IllegalArgumentException("Tên sản phẩm không được để trống");
+        }
+        if (request.getPrice() == null || request.getPrice() <= 0) {
+            throw new IllegalArgumentException("Giá sản phẩm phải lớn hơn 0");
+        }
+        if (request.getCategory() == null || request.getCategory().isBlank()) {
             throw new IllegalArgumentException("Danh mục sản phẩm không được để trống");
         }
     }
