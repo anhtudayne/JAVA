@@ -3,6 +3,8 @@ package com.example.springbootlearning.service;
 import com.example.springbootlearning.dto.request.ProductCreateRequest;
 import com.example.springbootlearning.dto.request.ProductUpdateRequest;
 import com.example.springbootlearning.dto.response.ProductResponse;
+import com.example.springbootlearning.exception.DuplicateResourceException;
+import com.example.springbootlearning.exception.ResourceNotFoundException;
 import com.example.springbootlearning.model.Product;
 import com.example.springbootlearning.repository.ProductRepository;
 import org.slf4j.Logger;
@@ -15,18 +17,17 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * 📘 BÀI 5 — Product Service (Refactored với DTO Pattern)
+ * 📘 BÀI 7 — Product Service (Refactored với Custom Exception & Logging)
  *
- * Thay đổi so với Bài 4:
- *   ① Nhận Request DTO (ProductCreateRequest, ProductUpdateRequest) thay vì Entity
- *   ② Trả Response DTO (ProductResponse) thay vì Entity
- *   ③ Chuyển đổi DTO ↔ Entity bên trong Service
+ * Thay đổi so với Bài 5-6:
+ *   ✅ RuntimeException → ResourceNotFoundException (404)
+ *   ✅ IllegalArgumentException → DuplicateResourceException (409)
+ *   ✅ Logging nhất quán: INFO cho sự kiện thành công, WARN cho cảnh báo, ERROR cho lỗi
  *
- * Luồng xử lý:
- *   Controller → Service (nhận DTO) → chuyển sang Entity → Repository → Entity → chuyển sang DTO → Controller
- *
- * Service KHÔNG biết HTTP (không có ResponseEntity, @GetMapping...)
- * Service làm việc với cả DTO (giao tiếp với Controller) và Entity (giao tiếp với Repository)
+ * Exception KHÔNG cần try-catch ở đây:
+ *   → Custom Exception kế thừa RuntimeException (Unchecked)
+ *   → GlobalExceptionHandler (@RestControllerAdvice) bắt tập trung
+ *   → Service chỉ cần throw, không cần xử lý
  */
 @Service
 public class ProductService {
@@ -47,32 +48,29 @@ public class ProductService {
 
     /**
      * Lấy tất cả sản phẩm → chuyển từ List<Product> sang List<ProductResponse>.
-     *
-     * Stream API pipeline:
-     *   products.stream()                     → Mở stream
-     *   .map(ProductResponse::fromEntity)     → Chuyển mỗi Product → ProductResponse
-     *   .collect(Collectors.toList())         → Thu thập kết quả vào List
-     *
-     * ProductResponse::fromEntity là Method Reference — viết gọn của:
-     *   .map(product -> ProductResponse.fromEntity(product))
      */
     public List<ProductResponse> getAllProducts() {
         log.debug("Lấy danh sách tất cả products");
-        return productRepository.findAll().stream()
+        List<ProductResponse> products = productRepository.findAll().stream()
                 .map(ProductResponse::fromEntity)
                 .collect(Collectors.toList());
+        log.info("📦 Trả về {} sản phẩm", products.size());
+        return products;
     }
 
     /**
      * Lấy sản phẩm theo ID → trả ProductResponse.
-     * Throw RuntimeException nếu không tìm thấy (Bài 7 sẽ thay bằng custom exception).
+     *
+     * 📘 BÀI 7: Thay RuntimeException → ResourceNotFoundException (404)
+     * → GlobalExceptionHandler bắt riêng, trả HTTP 404 chính xác
      */
     public ProductResponse getProductById(Long id) {
         log.debug("Tìm product với id={}", id);
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> {
-                    log.warn("Không tìm thấy product với id={}", id);
-                    return new RuntimeException("Product không tồn tại với id: " + id);
+                    log.warn("⚠️ Product không tìm thấy với id={}", id);
+                    return new ResourceNotFoundException("Product", "id", id);
+                    //         ^^^^^^^^^^^^^^^^^^^^^^^^ Cụ thể! 404 Not Found
                 });
         return ProductResponse.fromEntity(product);
     }
@@ -114,20 +112,18 @@ public class ProductService {
     /**
      * Tạo sản phẩm mới.
      *
-     * Luồng chuyển đổi:
-     *   ① ProductCreateRequest (DTO) → Product (Entity)     [copy field]
-     *   ② Product (Entity) → productRepository.save()       [lưu vào storage]
-     *   ③ Product (Entity) → ProductResponse (DTO)          [fromEntity]
+     * 📘 BÀI 7: Thay IllegalArgumentException → DuplicateResourceException (409)
+     * → GlobalExceptionHandler bắt riêng, trả HTTP 409 Conflict chính xác
      */
     public ProductResponse createProduct(ProductCreateRequest request) {
-        log.info("📥 Tạo product mới từ request: {}", request);
+        log.info("📥 Tạo product mới: name='{}', price={}", request.getName(), request.getPrice());
 
-        // 📘 BÀI 6: Không cần validateCreateRequest() nữa!
-        // @Valid trong Controller đã tự động kiểm tra trước khi request vào được đến đây.
-        // Nếu code chạy được tới dòng này → dữ liệu CHẮC CHẮN hợp lệ rồi.
-        // Kiểm tra trùng tên
+        // 📘 BÀI 6: @Valid trong Controller đã kiểm tra format dữ liệu
+        // 📘 BÀI 7: Kiểm tra trùng tên → DuplicateResourceException (409)
         if (productRepository.existsByName(request.getName())) {
-            throw new IllegalArgumentException("Sản phẩm đã tồn tại với tên: " + request.getName());
+            log.warn("⚠️ Product name đã tồn tại: '{}'", request.getName());
+            throw new DuplicateResourceException("Product", "name", request.getName());
+            //         ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Cụ thể! 409 Conflict
         }
 
         // ① Chuyển Request DTO → Entity
@@ -140,7 +136,7 @@ public class ProductService {
 
         // ② Lưu Entity
         Product saved = productRepository.save(product);
-        log.info("✅ Đã tạo product mới: {}", saved);
+        log.info("✅ Product created successfully: id={}, name='{}'", saved.getId(), saved.getName());
 
         // ③ Chuyển Entity → Response DTO
         return ProductResponse.fromEntity(saved);
@@ -153,17 +149,19 @@ public class ProductService {
     /**
      * PUT — Cập nhật TOÀN BỘ sản phẩm.
      *
-     * Nhận ProductUpdateRequest (DTO) thay vì Product (Entity).
-     * → Client KHÔNG thể ghi đè id, createdAt.
+     * 📘 BÀI 7: RuntimeException → ResourceNotFoundException (404)
      */
     public ProductResponse updateProduct(Long id, ProductUpdateRequest request) {
-        log.debug("PUT update product id={}", id);
+        log.info("📥 PUT update product id={}", id);
 
-        // Kiểm tra product tồn tại
+        // Kiểm tra product tồn tại → 404 nếu không
         productRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product không tồn tại với id: " + id));
+                .orElseThrow(() -> {
+                    log.warn("⚠️ Product không tìm thấy với id={} (PUT update)", id);
+                    return new ResourceNotFoundException("Product", "id", id);
+                });
 
-        // 📘 BÀI 6: Không cần validateUpdateRequest() nữa — @Valid đã kiểm tra rồi!
+        // 📘 BÀI 6: @Valid trong Controller đã kiểm tra format dữ liệu
         // Chuyển DTO → Entity mới
         Product updatedProduct = new Product();
         updatedProduct.setName(request.getName());
@@ -173,24 +171,29 @@ public class ProductService {
         updatedProduct.setStock(request.getStock() != null ? request.getStock() : 0);
 
         Product saved = productRepository.update(id, updatedProduct)
-                .orElseThrow(() -> new RuntimeException("Không thể cập nhật product id: " + id));
+                .orElseThrow(() -> {
+                    log.error("❌ Không thể cập nhật product id={}", id);
+                    return new ResourceNotFoundException("Product", "id", id);
+                });
 
-        log.info("✅ Đã PUT update product id={}: {}", id, saved);
+        log.info("✅ Product updated (PUT): id={}, name='{}'", id, saved.getName());
         return ProductResponse.fromEntity(saved);
     }
 
     /**
      * PATCH — Cập nhật MỘT PHẦN sản phẩm.
      *
-     * Dùng Map<String, Object> để nhận chỉ những field client muốn cập nhật.
-     * Field nào không có trong Map → giữ nguyên giá trị cũ.
+     * 📘 BÀI 7: RuntimeException → ResourceNotFoundException (404)
      */
     public ProductResponse patchProduct(Long id, Map<String, Object> updates) {
-        log.debug("PATCH update product id={}", id);
+        log.info("📥 PATCH update product id={}, fields={}", id, updates.keySet());
 
-        // Lấy product hiện tại
+        // Lấy product hiện tại → 404 nếu không
         Product existing = productRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product không tồn tại với id: " + id));
+                .orElseThrow(() -> {
+                    log.warn("⚠️ Product không tìm thấy với id={} (PATCH update)", id);
+                    return new ResourceNotFoundException("Product", "id", id);
+                });
 
         // Chỉ cập nhật field CÓ TRONG map
         if (updates.containsKey("name")) {
@@ -226,7 +229,7 @@ public class ProductService {
         }
 
         existing.setUpdatedAt(LocalDateTime.now());
-        log.info("✅ Đã PATCH product id={}: {}", id, existing);
+        log.info("✅ Product patched: id={}, updated fields={}", id, updates.keySet());
         return ProductResponse.fromEntity(existing);
     }
 
@@ -236,19 +239,22 @@ public class ProductService {
 
     /**
      * Xóa sản phẩm theo ID.
-     * Throw RuntimeException nếu không tìm thấy.
+     *
+     * 📘 BÀI 7: RuntimeException → ResourceNotFoundException (404)
      */
     public void deleteProduct(Long id) {
-        // Kiểm tra tồn tại trước khi xóa
+        log.info("📥 Delete product id={}", id);
+
+        // Kiểm tra tồn tại trước khi xóa → 404 nếu không
         productRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product không tồn tại với id: " + id));
+                .orElseThrow(() -> {
+                    log.warn("⚠️ Product không tìm thấy với id={} (DELETE)", id);
+                    return new ResourceNotFoundException("Product", "id", id);
+                });
 
         boolean deleted = productRepository.deleteById(id);
         if (deleted) {
-            log.info("🗑️ Đã xóa product id={}", id);
+            log.info("🗑️ Product deleted: id={}", id);
         }
     }
-
-    // 📘 BÀI 6: Đã xóa validateCreateRequest() và validateUpdateRequest()
-    // Thay thế bằng Jakarta Bean Validation annotations trên DTO + @Valid trong Controller
 }

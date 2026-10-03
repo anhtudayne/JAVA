@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    📘 BÀI 7 — Logback Configuration
+
+    File này kiểm soát CHI TIẾT cách log được format và ghi ra đâu.
+    Đặt tại: src/main/resources/logback-spring.xml
+    Spring Boot tự động đọc file này khi khởi động (không cần khai báo thêm).
+
+    Cấu trúc:
+      ① Property: Biến dùng chung
+      ② Appender: Nơi log được ghi (Console, File)
+      ③ Profile:  Config khác nhau cho dev/prod
+      ④ Root Logger: Mức log mặc định
+-->
+<configuration>
+
+    <!-- ① Biến dùng chung -->
+    <property name="LOG_DIR" value="logs"/>
+    <property name="APP_NAME" value="springboot-learning"/>
+
+    <!-- Log Pattern — Định dạng mỗi dòng log -->
+    <!--
+        %d{...}             → Timestamp:        2026-09-30 10:15:30.123
+        [%thread]           → Thread name:       [http-nio-8080-exec-1]
+        [%X{traceId:-N/A}]  → MDC TraceId:      [abc-1234] hoặc [N/A] nếu chưa set
+        %-5level             → Log level (pad 5): INFO , DEBUG, ERROR
+        %logger{36}         → Class name (max 36 chars): c.e.s.service.ProductService
+        %msg                → Message nội dung
+        %n                  → Xuống dòng
+    -->
+    <property name="LOG_PATTERN"
+              value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId:-N/A}] %-5level %logger{36} — %msg%n"/>
+
+    <!-- ② Console Appender — Log ra terminal (luôn bật) -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- ③ Rolling File Appender — Log ra file, tự xoay vòng -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <!-- File log hiện tại -->
+        <file>${LOG_DIR}/${APP_NAME}.log</file>
+
+        <!-- Chính sách xoay vòng: theo ngày + kích thước -->
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <!-- Pattern tên file cũ: springboot-learning.2026-09-30.0.log.gz -->
+            <fileNamePattern>${LOG_DIR}/${APP_NAME}.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+
+            <!-- Khi file hiện tại > 10MB → xoay sang file mới -->
+            <maxFileSize>10MB</maxFileSize>
+
+            <!-- Giữ tối đa 30 file log cũ (xóa cũ nhất khi vượt) -->
+            <maxHistory>30</maxHistory>
+
+            <!-- Tổng dung lượng tất cả file log ≤ 500MB -->
+            <totalSizeCap>500MB</totalSizeCap>
+        </rollingPolicy>
+
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- ④ Profile-based config -->
+    <!-- Development: Log chi tiết hơn (DEBUG) cho code của mình -->
+    <springProfile name="dev">
+        <logger name="com.example.springbootlearning" level="DEBUG"/>
+    </springProfile>
+
+    <!-- Production: Chỉ log INFO trở lên (ít log, tiết kiệm I/O) -->
+    <springProfile name="prod">
+        <logger name="com.example.springbootlearning" level="INFO"/>
+    </springProfile>
+
+    <!-- ⑤ Root Logger — Mức log mặc định cho toàn bộ ứng dụng -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+    </root>
+
+</configuration>

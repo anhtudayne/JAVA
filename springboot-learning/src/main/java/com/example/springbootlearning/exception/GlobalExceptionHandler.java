@@ -5,6 +5,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -13,19 +14,24 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * 📘 BÀI 6 — Global Exception Handler
+ * 📘 BÀI 7 — Global Exception Handler (Refactored)
  *
- * Trạm bắt lỗi tập trung cho TOÀN BỘ dự án.
- * Khi bất kỳ Controller nào ném exception, Spring sẽ đưa về đây xử lý.
+ * Trạm bắt lỗi TẬP TRUNG cho TOÀN BỘ ứng dụng.
+ * Khi bất kỳ Controller nào ném exception, Spring sẽ chuyển về đây xử lý.
  *
  * @RestControllerAdvice = @ControllerAdvice + @ResponseBody
- *   → Cho phép return trực tiếp Object (Spring sẽ dùng Jackson serialize ra JSON)
+ *   → Mỗi @ExceptionHandler method return Object → Jackson serialize ra JSON tự động
  *
- * Các exception được xử lý:
- *   1. MethodArgumentNotValidException — Lỗi @Valid validation
- *   2. IllegalArgumentException — Lỗi nghiệp vụ đơn giản (tên trùng, v.v.)
- *   3. RuntimeException — Lỗi không tìm thấy resource
- *   4. Exception — Catch-all cho lỗi không mong đợi (luôn đặt cuối cùng!)
+ * Exception Specificity Rule:
+ *   Spring chọn handler CỤ THỂ NHẤT theo class hierarchy.
+ *   ResourceNotFoundException > BusinessException > RuntimeException > Exception
+ *
+ * Thay đổi so với Bài 6:
+ *   ✅ Thêm handler cho ResourceNotFoundException (404)
+ *   ✅ Thêm handler cho DuplicateResourceException (409)
+ *   ✅ Thêm handler cho HttpMessageNotReadableException (400 — JSON sai format)
+ *   ✅ Xóa handler cho RuntimeException chung (quá rộng, nuốt mất lỗi thật)
+ *   ✅ Xóa handler cho IllegalArgumentException (đã thay bằng Custom Exception)
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -33,14 +39,43 @@ public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     // ================================================================
-    // ① Validation Errors — @Valid thất bại
+    // ① ResourceNotFoundException → 404 Not Found
     // ================================================================
     //
-    // Khi Spring kiểm tra @Valid trên @RequestBody và phát hiện field vi phạm,
-    // nó ném MethodArgumentNotValidException chứa DANH SÁCH tất cả lỗi.
+    // Khi Service ném: throw new ResourceNotFoundException("Product", "id", 999)
+    // → Bắt ở đây, trả 404 với message rõ ràng
     //
-    // Ta trích xuất lỗi từng field thành Map<fieldName, errorMessage>
-    // và trả về trong ApiResponse.data để Frontend đọc được.
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ApiResponse<?>> handleResourceNotFound(ResourceNotFoundException ex) {
+        log.warn("⚠️ Resource not found: {}", ex.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND) // 404
+                .body(ApiResponse.error(ex.getStatusCode(), ex.getMessage()));
+    }
+
+    // ================================================================
+    // ② DuplicateResourceException → 409 Conflict
+    // ================================================================
+    //
+    // Khi Service ném: throw new DuplicateResourceException("Product", "name", "MacBook")
+    // → Bắt ở đây, trả 409 (resource đã tồn tại, xung đột)
+    //
+    @ExceptionHandler(DuplicateResourceException.class)
+    public ResponseEntity<ApiResponse<?>> handleDuplicateResource(DuplicateResourceException ex) {
+        log.warn("⚠️ Duplicate resource: {}", ex.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT) // 409
+                .body(ApiResponse.error(ex.getStatusCode(), ex.getMessage()));
+    }
+
+    // ================================================================
+    // ③ MethodArgumentNotValidException → 400 Bad Request (từ Bài 6)
+    // ================================================================
+    //
+    // Khi @Valid phát hiện field vi phạm → Spring ném MethodArgumentNotValidException.
+    // Trích xuất lỗi từng field thành Map<fieldName, errorMessage>.
     //
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Map<String, String>>> handleValidationErrors(
@@ -48,9 +83,6 @@ public class GlobalExceptionHandler {
 
         Map<String, String> fieldErrors = new HashMap<>();
 
-        // Duyệt qua từng lỗi field:
-        // - getField() → tên field bị lỗi (vd: "name", "price")
-        // - getDefaultMessage() → message đã khai báo trong annotation (vd: "Tên không được rỗng")
         ex.getBindingResult().getFieldErrors().forEach(error ->
                 fieldErrors.put(error.getField(), error.getDefaultMessage())
         );
@@ -58,52 +90,45 @@ public class GlobalExceptionHandler {
         log.warn("⚠️ Validation failed: {}", fieldErrors);
 
         return ResponseEntity
-                .badRequest() // HTTP 400 Bad Request
+                .badRequest() // 400
                 .body(ApiResponse.error(400, "Dữ liệu không hợp lệ", fieldErrors));
     }
 
     // ================================================================
-    // ② IllegalArgumentException — Lỗi nghiệp vụ đơn giản
+    // ④ HttpMessageNotReadableException → 400 Bad Request (JSON sai format)
     // ================================================================
     //
-    // Ví dụ: Tên sản phẩm đã tồn tại, input không hợp lệ về logic nghiệp vụ
+    // Xảy ra khi:
+    //   - Client gửi JSON sai cú pháp: { "name": "abc }  (thiếu dấu ")
+    //   - Client gửi body rỗng (Content-Type: application/json nhưng body trống)
+    //   - Kiểu dữ liệu không khớp: { "price": "abc" }  (String thay vì Number)
     //
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<ApiResponse<?>> handleIllegalArgument(IllegalArgumentException ex) {
-        log.warn("⚠️ Business rule violation: {}", ex.getMessage());
+    // Jackson không thể deserialize → ném HttpMessageNotReadableException
+    // TRƯỚC KHI đến Controller → cần bắt riêng để trả message thân thiện
+    //
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<?>> handleMalformedJson(HttpMessageNotReadableException ex) {
+        log.warn("⚠️ Malformed JSON request: {}", ex.getMessage());
 
         return ResponseEntity
-                .badRequest()
-                .body(ApiResponse.error(400, ex.getMessage()));
+                .badRequest() // 400
+                .body(ApiResponse.error(400, "Request body không đúng định dạng JSON"));
     }
 
     // ================================================================
-    // ③ RuntimeException — Lỗi không tìm thấy resource (tạm thời)
+    // ⑤ Exception — Catch-all (LUÔN ĐẶT CUỐI CÙNG!)
     // ================================================================
     //
-    // Bài 7 sẽ thay thế bằng custom ResourceNotFoundException.
-    // Hiện tại dùng RuntimeException chung để bắt lỗi "Product không tồn tại"
+    // Bắt MỌI exception không mong đợi: NullPointerException, lỗi Database, lỗi IO...
     //
-    @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<ApiResponse<?>> handleRuntimeException(RuntimeException ex) {
-        log.warn("⚠️ Runtime error: {}", ex.getMessage());
-
-        return ResponseEntity
-                .status(HttpStatus.NOT_FOUND) // 404
-                .body(ApiResponse.error(404, ex.getMessage()));
-    }
-
-    // ================================================================
-    // ④ Exception — Catch-all (LUÔN ĐẶT CUỐI CÙNG!)
-    // ================================================================
-    //
-    // Bắt mọi lỗi không mong đợi (NullPointerException, lỗi Database, v.v.)
-    // Trả message chung chung cho Client (KHÔNG để lộ chi tiết kỹ thuật nội bộ)
-    // Log.error ghi lại full StackTrace vào file log để Dev debug
+    // ⚠️ QUAN TRỌNG:
+    //   - KHÔNG trả ex.getMessage() cho Client → có thể lộ thông tin nội bộ
+    //   - Luôn trả message chung chung cho Client
+    //   - log.error() với exception object → ghi FULL STACK TRACE vào log file
     //
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<?>> handleAllUncaughtException(Exception ex) {
-        log.error("❌ Hệ thống gặp sự cố nghiêm trọng: ", ex);
+        log.error("❌ Unexpected error: ", ex); // ex ở cuối → SLF4J in full stack trace
 
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR) // 500
