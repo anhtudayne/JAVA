@@ -1,5 +1,7 @@
 package com.example.springbootlearning.dto.response;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import java.time.LocalDateTime;
 
 /**
@@ -24,12 +26,23 @@ import java.time.LocalDateTime;
  *   3. Lấy response.data để render
  *
  * @param <T> Kiểu dữ liệu của field data
+ *
+ * 📘 BÀI 8 — springdoc tự giải generic: ResponseEntity<ApiResponse<ProductResponse>>
+ *   → sinh schema riêng "ApiResponseProductResponse" với data = ProductResponse.
  */
+@Schema(description = "Wrapper chuẩn cho mọi response của API")
 public class ApiResponse<T> {
 
+    @Schema(description = "HTTP status code", example = "200")
     private int status;
+
+    @Schema(description = "Thông điệp mô tả kết quả", example = "Thành công")
     private String message;
+
+    @Schema(description = "Dữ liệu trả về (null khi lỗi, hoặc map lỗi từng field khi validation fail)")
     private T data;
+
+    @Schema(description = "Thời điểm server tạo response", example = "2026-10-03T14:30:00")
     private LocalDateTime timestamp;
 
     // ===== Private Constructor — Chỉ tạo qua Static Factory Methods =====

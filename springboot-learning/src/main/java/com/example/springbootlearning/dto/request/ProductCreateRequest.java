@@ -1,5 +1,6 @@
 package com.example.springbootlearning.dto.request;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.*;
 
 /**
@@ -20,23 +21,33 @@ import jakarta.validation.constraints.*;
  * Jackson vẫn cần:
  *   - No-args constructor (để tạo object)
  *   - Setter methods (để gán giá trị từ JSON)
+ *
+ * 📘 BÀI 8 — @Schema: thêm mô tả + giá trị mẫu cho Swagger UI.
+ *   springdoc TỰ ĐỌC @NotBlank/@Size/@Positive → required/minLength/minimum,
+ *   nên @Schema chỉ cần bổ sung phần NGỮ NGHĨA (description, example).
  */
+@Schema(description = "Dữ liệu tạo sản phẩm mới — body của POST /api/v1/products")
 public class ProductCreateRequest {
 
+    @Schema(description = "Tên sản phẩm (duy nhất trong hệ thống)", example = "MacBook Pro M4 16 inch")
     @NotBlank(message = "Tên sản phẩm không được để trống")
     @Size(min = 2, max = 200, message = "Tên sản phẩm phải từ 2 đến 200 ký tự")
     private String name;
 
     // description không bắt buộc → không cần annotation validation
+    @Schema(description = "Mô tả chi tiết (không bắt buộc)", example = "Chip M4 Pro, RAM 32GB, SSD 1TB")
     private String description;
 
+    @Schema(description = "Giá sản phẩm (USD), phải > 0", example = "2499.99")
     @NotNull(message = "Giá sản phẩm không được để trống")
     @Positive(message = "Giá sản phẩm phải lớn hơn 0")
     private Double price;
 
+    @Schema(description = "Danh mục sản phẩm", example = "Laptop")
     @NotBlank(message = "Danh mục sản phẩm không được để trống")
     private String category;
 
+    @Schema(description = "Số lượng tồn kho (>= 0)", example = "15")
     @PositiveOrZero(message = "Số lượng tồn kho không được âm")
     private Integer stock;
 
