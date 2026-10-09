@@ -10,24 +10,21 @@ import com.example.springbootlearning.repository.ProductRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors; 
+import java.util.stream.Collectors;
 
 /**
- * 📘 BÀI 7 — Product Service (Refactored với Custom Exception & Logging)
+ * 📘 BÀI 9 — Product Service (Refactored với Spring Data JPA & Hibernate)
  *
- * Thay đổi so với Bài 5-6:
- *   ✅ RuntimeException → ResourceNotFoundException (404)
- *   ✅ IllegalArgumentException → DuplicateResourceException (409)
- *   ✅ Logging nhất quán: INFO cho sự kiện thành công, WARN cho cảnh báo, ERROR cho lỗi
- *
- * Exception KHÔNG cần try-catch ở đây:
- *   → Custom Exception kế thừa RuntimeException (Unchecked)
- *   → GlobalExceptionHandler (@RestControllerAdvice) bắt tập trung
- *   → Service chỉ cần throw, không cần xử lý
+ * Thay đổi so với Bài 7-8:
+ *   ✅ Dùng JpaRepository thay thế cho In-Memory List
+ *   ✅ Áp dụng @Transactional(readOnly = true) cho các thao tác đọc để tối ưu hiệu năng
+ *   ✅ Áp dụng @Transactional cho các thao tác ghi (create, update, delete)
+ *   ✅ Update Entity chuẩn JPA: load Managed Entity → set fields → Hibernate Dirty Checking / save()
+ *   ✅ JpaRepository.deleteById() trả về void (thay vì boolean như custom in-memory)
  */
 @Service
 public class ProductService {
@@ -36,10 +33,10 @@ public class ProductService {
 
     private final ProductRepository productRepository;
 
-    // Constructor Injection — Spring tự inject ProductRepository
+    // Constructor Injection — Spring tự động inject ProductRepository proxy
     public ProductService(ProductRepository productRepository) {
         this.productRepository = productRepository;
-        log.info("✅ ProductService đã được tạo — ProductRepository được inject thành công!");
+        log.info("✅ ProductService đã được tạo — Spring Data JpaRepository được inject thành công!");
     }
 
     // ================================================================
@@ -47,30 +44,29 @@ public class ProductService {
     // ================================================================
 
     /**
-     * Lấy tất cả sản phẩm → chuyển từ List<Product> sang List<ProductResponse>.
+     * Lấy tất cả sản phẩm trong database → chuyển sang List<ProductResponse>.
      */
+    @Transactional(readOnly = true)
     public List<ProductResponse> getAllProducts() {
-        log.debug("Lấy danh sách tất cả products");
+        log.debug("Lấy danh sách tất cả products từ database");
         List<ProductResponse> products = productRepository.findAll().stream()
                 .map(ProductResponse::fromEntity)
                 .collect(Collectors.toList());
-        log.info("📦 Trả về {} sản phẩm", products.size());
+        log.info("📦 Trả về {} sản phẩm từ database", products.size());
         return products;
     }
 
     /**
      * Lấy sản phẩm theo ID → trả ProductResponse.
-     *
-     * 📘 BÀI 7: Thay RuntimeException → ResourceNotFoundException (404)
-     * → GlobalExceptionHandler bắt riêng, trả HTTP 404 chính xác
+     * Ném ResourceNotFoundException (404) nếu không tồn tại.
      */
+    @Transactional(readOnly = true)
     public ProductResponse getProductById(Long id) {
         log.debug("Tìm product với id={}", id);
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> {
                     log.warn("⚠️ Product không tìm thấy với id={}", id);
                     return new ResourceNotFoundException("Product", "id", id);
-                    //         ^^^^^^^^^^^^^^^^^^^^^^^^ Cụ thể! 404 Not Found
                 });
         return ProductResponse.fromEntity(product);
     }
@@ -78,9 +74,10 @@ public class ProductService {
     /**
      * Tìm kiếm sản phẩm theo keyword trong tên → trả List<ProductResponse>.
      */
+    @Transactional(readOnly = true)
     public List<ProductResponse> searchByName(String keyword) {
         log.debug("Tìm kiếm product với keyword='{}'", keyword);
-        return productRepository.searchByName(keyword).stream()
+        return productRepository.findByNameContainingIgnoreCase(keyword).stream()
                 .map(ProductResponse::fromEntity)
                 .collect(Collectors.toList());
     }
@@ -88,9 +85,10 @@ public class ProductService {
     /**
      * Lọc sản phẩm theo category → trả List<ProductResponse>.
      */
+    @Transactional(readOnly = true)
     public List<ProductResponse> getByCategory(String category) {
         log.debug("Lọc product theo category='{}'", category);
-        return productRepository.findByCategory(category).stream()
+        return productRepository.findByCategoryIgnoreCase(category).stream()
                 .map(ProductResponse::fromEntity)
                 .collect(Collectors.toList());
     }
@@ -98,9 +96,10 @@ public class ProductService {
     /**
      * Lọc sản phẩm theo khoảng giá → trả List<ProductResponse>.
      */
+    @Transactional(readOnly = true)
     public List<ProductResponse> getByPriceRange(Double minPrice, Double maxPrice) {
         log.debug("Lọc product theo giá [{} - {}]", minPrice, maxPrice);
-        return productRepository.findByPriceRange(minPrice, maxPrice).stream()
+        return productRepository.findByPriceBetween(minPrice, maxPrice).stream()
                 .map(ProductResponse::fromEntity)
                 .collect(Collectors.toList());
     }
@@ -110,20 +109,16 @@ public class ProductService {
     // ================================================================
 
     /**
-     * Tạo sản phẩm mới.
-     *
-     * 📘 BÀI 7: Thay IllegalArgumentException → DuplicateResourceException (409)
-     * → GlobalExceptionHandler bắt riêng, trả HTTP 409 Conflict chính xác
+     * Tạo sản phẩm mới trong database.
      */
+    @Transactional
     public ProductResponse createProduct(ProductCreateRequest request) {
         log.info("📥 Tạo product mới: name='{}', price={}", request.getName(), request.getPrice());
 
-        // 📘 BÀI 6: @Valid trong Controller đã kiểm tra format dữ liệu
-        // 📘 BÀI 7: Kiểm tra trùng tên → DuplicateResourceException (409)
-        if (productRepository.existsByName(request.getName())) {
+        // Kiểm tra trùng tên (không phân biệt hoa thường)
+        if (productRepository.existsByNameIgnoreCase(request.getName())) {
             log.warn("⚠️ Product name đã tồn tại: '{}'", request.getName());
             throw new DuplicateResourceException("Product", "name", request.getName());
-            //         ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Cụ thể! 409 Conflict
         }
 
         // ① Chuyển Request DTO → Entity
@@ -134,7 +129,7 @@ public class ProductService {
         product.setCategory(request.getCategory());
         product.setStock(request.getStock() != null ? request.getStock() : 0);
 
-        // ② Lưu Entity
+        // ② Lưu Entity vào database qua JpaRepository
         Product saved = productRepository.save(product);
         log.info("✅ Product created successfully: id={}, name='{}'", saved.getId(), saved.getName());
 
@@ -147,34 +142,34 @@ public class ProductService {
     // ================================================================
 
     /**
-     * PUT — Cập nhật TOÀN BỘ sản phẩm.
-     *
-     * 📘 BÀI 7: RuntimeException → ResourceNotFoundException (404)
+     * PUT — Cập nhật TOÀN BỘ thông tin sản phẩm.
      */
+    @Transactional
     public ProductResponse updateProduct(Long id, ProductUpdateRequest request) {
         log.info("📥 PUT update product id={}", id);
 
-        // Kiểm tra product tồn tại → 404 nếu không
-        productRepository.findById(id)
+        // ① Kiểm tra product tồn tại trong DB → 404 nếu không
+        Product existingProduct = productRepository.findById(id)
                 .orElseThrow(() -> {
                     log.warn("⚠️ Product không tìm thấy với id={} (PUT update)", id);
                     return new ResourceNotFoundException("Product", "id", id);
                 });
 
-        // 📘 BÀI 6: @Valid trong Controller đã kiểm tra format dữ liệu
-        // Chuyển DTO → Entity mới
-        Product updatedProduct = new Product();
-        updatedProduct.setName(request.getName());
-        updatedProduct.setDescription(request.getDescription());
-        updatedProduct.setPrice(request.getPrice());
-        updatedProduct.setCategory(request.getCategory());
-        updatedProduct.setStock(request.getStock() != null ? request.getStock() : 0);
+        // ② Kiểm tra trùng tên với sản phẩm khác (ngoại trừ chính nó)
+        if (productRepository.existsByNameIgnoreCaseAndIdNot(request.getName(), id)) {
+            log.warn("⚠️ Tên sản phẩm '{}' đã được sử dụng bởi sản phẩm khác", request.getName());
+            throw new DuplicateResourceException("Product", "name", request.getName());
+        }
 
-        Product saved = productRepository.update(id, updatedProduct)
-                .orElseThrow(() -> {
-                    log.error("❌ Không thể cập nhật product id={}", id);
-                    return new ResourceNotFoundException("Product", "id", id);
-                });
+        // ③ Cập nhật các trường trên Managed Entity
+        existingProduct.setName(request.getName());
+        existingProduct.setDescription(request.getDescription());
+        existingProduct.setPrice(request.getPrice());
+        existingProduct.setCategory(request.getCategory());
+        existingProduct.setStock(request.getStock() != null ? request.getStock() : 0);
+
+        // ④ Lưu lại (trong @Transactional, Dirty Checking cũng sẽ tự động phát hiện và sinh lệnh UPDATE)
+        Product saved = productRepository.save(existingProduct);
 
         log.info("✅ Product updated (PUT): id={}, name='{}'", id, saved.getName());
         return ProductResponse.fromEntity(saved);
@@ -182,24 +177,26 @@ public class ProductService {
 
     /**
      * PATCH — Cập nhật MỘT PHẦN sản phẩm.
-     *
-     * 📘 BÀI 7: RuntimeException → ResourceNotFoundException (404)
      */
+    @Transactional
     public ProductResponse patchProduct(Long id, Map<String, Object> updates) {
         log.info("📥 PATCH update product id={}, fields={}", id, updates.keySet());
 
-        // Lấy product hiện tại → 404 nếu không
+        // ① Lấy product hiện tại từ DB → 404 nếu không tìm thấy
         Product existing = productRepository.findById(id)
                 .orElseThrow(() -> {
                     log.warn("⚠️ Product không tìm thấy với id={} (PATCH update)", id);
                     return new ResourceNotFoundException("Product", "id", id);
                 });
 
-        // Chỉ cập nhật field CÓ TRONG map
+        // ② Chỉ cập nhật field CÓ TRONG map
         if (updates.containsKey("name")) {
             String name = (String) updates.get("name");
             if (name == null || name.isBlank()) {
                 throw new IllegalArgumentException("Tên sản phẩm không được để trống");
+            }
+            if (productRepository.existsByNameIgnoreCaseAndIdNot(name, id)) {
+                throw new DuplicateResourceException("Product", "name", name);
             }
             existing.setName(name);
         }
@@ -228,9 +225,9 @@ public class ProductService {
             existing.setStock(stock);
         }
 
-        existing.setUpdatedAt(LocalDateTime.now());
+        Product saved = productRepository.save(existing);
         log.info("✅ Product patched: id={}, updated fields={}", id, updates.keySet());
-        return ProductResponse.fromEntity(existing);
+        return ProductResponse.fromEntity(saved);
     }
 
     // ================================================================
@@ -239,22 +236,18 @@ public class ProductService {
 
     /**
      * Xóa sản phẩm theo ID.
-     *
-     * 📘 BÀI 7: RuntimeException → ResourceNotFoundException (404)
      */
+    @Transactional
     public void deleteProduct(Long id) {
         log.info("📥 Delete product id={}", id);
 
         // Kiểm tra tồn tại trước khi xóa → 404 nếu không
-        productRepository.findById(id)
-                .orElseThrow(() -> {
-                    log.warn("⚠️ Product không tìm thấy với id={} (DELETE)", id);
-                    return new ResourceNotFoundException("Product", "id", id);
-                });
-
-        boolean deleted = productRepository.deleteById(id);
-        if (deleted) {
-            log.info("🗑️ Product deleted: id={}", id);
+        if (!productRepository.existsById(id)) {
+            log.warn("⚠️ Product không tìm thấy với id={} (DELETE)", id);
+            throw new ResourceNotFoundException("Product", "id", id);
         }
+
+        productRepository.deleteById(id);
+        log.info("🗑️ Product deleted: id={}", id);
     }
 }

@@ -1303,10 +1303,10 @@ springdoc.default-produces-media-type=application/json
 ## 📘 Bài 9: Spring Data JPA & Hibernate — ORM Fundamentals
 
 ### 🎯 Mục tiêu bài học
-- [ ] Hiểu ORM (Object-Relational Mapping) là gì và tại sao dùng nó
-- [ ] Phân biệt JPA (specification) vs Hibernate (implementation) vs Spring Data JPA (abstraction)
-- [ ] Tạo Entity, kết nối database, và thực hiện CRUD với `JpaRepository`
-- [ ] Hiểu các annotation: `@Entity`, `@Table`, `@Id`, `@GeneratedValue`, `@Column`
+- [x] Hiểu ORM (Object-Relational Mapping) là gì và tại sao dùng nó
+- [x] Phân biệt JPA (specification) vs Hibernate (implementation) vs Spring Data JPA (abstraction)
+- [x] Tạo Entity, kết nối database, và thực hiện CRUD với `JpaRepository`
+- [x] Hiểu các annotation: `@Entity`, `@Table`, `@Id`, `@GeneratedValue`, `@Column`
 
 ### 📖 Nội dung lý thuyết
 

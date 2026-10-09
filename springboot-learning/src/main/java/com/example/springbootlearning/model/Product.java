@@ -1,36 +1,71 @@
 package com.example.springbootlearning.model;
 
+import jakarta.persistence.*;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
 import java.time.LocalDateTime;
 
 /**
- * 📘 BÀI 4 — Product Model (POJO)
+ * 📘 BÀI 9 — Product Entity (JPA & Hibernate ORM)
  *
- * Đại diện cho một sản phẩm trong hệ thống.
- * Dùng để minh hoạ CRUD API hoàn chỉnh với tất cả HTTP Methods.
+ * Chuyển đổi từ POJO thuần sang JPA Entity được ánh xạ với bảng `products` trong Database.
  *
- * ✅ Phải có:
- *   - Constructor mặc định (no-args) → Jackson cần để deserialize JSON → Object
- *   - Getter methods → Jackson cần để serialize Object → JSON
- *   - Setter methods → Jackson cần để gán giá trị khi deserialize
+ * Các annotation chính của JPA/Hibernate:
+ *   - @Entity: Đánh dấu class này là 1 Entity được quản lý bởi JPA/Hibernate.
+ *   - @Table(name = "products"): Chỉ định tên bảng trong cơ sở dữ liệu.
+ *   - @Id: Khóa chính (Primary Key).
+ *   - @GeneratedValue(strategy = GenerationType.IDENTITY): Khóa chính tự tăng (Auto-increment).
+ *   - @Column: Tùy biến cột (tên cột, độ dài, ràng buộc nullable, unique, updatable).
+ *   - @CreationTimestamp: Tự gán thời điểm tạo khi INSERT (Hibernate tự động).
+ *   - @UpdateTimestamp: Tự gán thời điểm sửa khi UPDATE (Hibernate tự động).
+ *
+ * ⚠️ Bắt buộc theo đặc tả JPA:
+ *   1. Phải có Constructor không tham số (No-args constructor) để Hibernate khởi tạo qua Reflection.
+ *   2. Class không được là `final` để Hibernate có thể tạo CGLIB/ByteBuddy Proxy cho Lazy Loading.
  */
+@Entity
+@Table(name = "products")
 public class Product {
 
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "name", nullable = false, length = 200)
     private String name;
+
+    @Column(name = "description", length = 1000)
     private String description;
+
+    @Column(name = "price", nullable = false)
     private Double price;
+
+    @Column(name = "category", length = 100)
     private String category;
+
+    @Column(name = "stock", nullable = false)
     private Integer stock;
+
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
     // ===== Constructors =====
 
-    // Constructor mặc định — BẮT BUỘC cho Jackson
+    /**
+     * BẮT BUỘC cho JPA/Hibernate (Reflection) và Jackson.
+     */
     public Product() {
     }
 
-    // Constructor đầy đủ — dùng trong code khi tạo object
+    /**
+     * Constructor thuận tiện cho việc tạo entity mới trước khi lưu.
+     */
     public Product(Long id, String name, String description, Double price,
                    String category, Integer stock) {
         this.id = id;
@@ -39,8 +74,6 @@ public class Product {
         this.price = price;
         this.category = category;
         this.stock = stock;
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
     }
 
     // ===== Getters & Setters =====

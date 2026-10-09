@@ -105,9 +105,7 @@ public class UserService {
     public void deleteUser(Long id) {
         // Kiểm tra user có tồn tại không trước khi xóa
         getUserById(id); // Sẽ throw exception nếu không tìm thấy
-        boolean deleted = userRepository.deleteById(id);
-        if (deleted) {
-            log.info("Đã xóa user với id={}", id);
-        }
+        userRepository.deleteById(id);
+        log.info("Đã xóa user với id={}", id);
     }
 }

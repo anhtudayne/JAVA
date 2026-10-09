@@ -1,27 +1,33 @@
 package com.example.springbootlearning.model;
 
+import jakarta.persistence.*;
+
 /**
- * 📘 BÀI 2 — Model (POJO - Plain Old Java Object)
+ * 📘 BÀI 9 — User Entity (JPA & Hibernate ORM)
  *
- * Model là class đại diện cho dữ liệu trong ứng dụng.
- * Nó KHÔNG có annotation Spring nào — chỉ là Java thuần.
- *
- * POJO = class Java bình thường, không kế thừa framework class nào.
- * Ở các bài sau (Bài 9), class này sẽ trở thành JPA Entity khi kết nối database.
+ * Chuyển đổi từ POJO thuần (Bài 2) sang JPA Entity được ánh xạ với bảng `users` trong Database.
+ * Sẵn sàng cho việc thiết lập quan hệ One-to-Many / Many-to-One ở Bài 10.
  */
+@Entity
+@Table(name = "users")
 public class User {
 
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(name = "name", nullable = false, length = 100)
     private String name;
+
+    @Column(name = "email", nullable = false, unique = true, length = 150)
     private String email;
 
     // ===== Constructors =====
 
-    // Constructor mặc định (cần cho Jackson deserialize JSON → Object)
+    // Bắt buộc cho Hibernate (No-args constructor)
     public User() {
     }
 
-    // Constructor đầy đủ
     public User(Long id, String name, String email) {
         this.id = id;
         this.name = name;
@@ -29,8 +35,6 @@ public class User {
     }
 
     // ===== Getters & Setters =====
-    // Jackson cần getter để serialize Object → JSON
-    // Jackson cần setter (hoặc constructor) để deserialize JSON → Object
 
     public Long getId() {
         return id;
@@ -56,7 +60,6 @@ public class User {
         this.email = email;
     }
 
-    // toString — hữu ích khi debug/log
     @Override
     public String toString() {
         return "User{id=" + id + ", name='" + name + "', email='" + email + "'}";

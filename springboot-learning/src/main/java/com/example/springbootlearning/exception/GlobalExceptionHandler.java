@@ -118,6 +118,18 @@ public class GlobalExceptionHandler {
     // ================================================================
     // ⑤ Exception — Catch-all (LUÔN ĐẶT CUỐI CÙNG!)
     // ================================================================
+    // 🩺 BÀI 9: Bắt lỗi khi không tìm thấy Static Resource (ví dụ favicon.ico)
+    // Trả về 404 gọn gàng, tránh bị Exception.class bắt và log error 500
+    // ================================================================
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<?>> handleNoResourceFound(org.springframework.web.servlet.resource.NoResourceFoundException ex) {
+        log.trace("🔍 Static resource không tồn tại: {}", ex.getResourcePath());
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error(404, "Tài nguyên tĩnh không tồn tại: " + ex.getResourcePath()));
+    }
+
+    // ================================================================
     //
     // Bắt MỌI exception không mong đợi: NullPointerException, lỗi Database, lỗi IO...
     //
