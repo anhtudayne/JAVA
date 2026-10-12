@@ -121,6 +121,58 @@ sequenceDiagram
     end
 ```
 
+### 1.3. Phân biệt thực tế: Có @Transactional vs Không có @Transactional khi cập nhật (Dirty Checking)
+
+Nhiều lập trình viên thắc mắc: *"Trong Service, ta gọi `findById()`, sau đó chỉ dùng các hàm `set...` là tự động ghi thẳng xuống database rồi hả?"*
+
+👉 **Câu trả lời:** ĐÚNG, NHƯNG BẮT BUỘC PHẢI CÓ `@Transactional`!
+
+#### 🔹 Kịch bản 1: Có `@Transactional` (Tự động cập nhật không cần gọi `.save()`)
+```java
+@Service
+public class ProductService {
+
+    @Transactional // 👈 BẮT BUỘC PHẢI CÓ ANNOTATION NÀY!
+    public void updatePrice(Long id, Double newPrice) {
+        // 1. Lấy entity lên -> Hibernate đưa vào trạng thái "Managed" và chụp Snapshot
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Not found"));
+
+        // 2. Chỉ cần gọi hàm SET
+        product.setPrice(newPrice);
+
+        // ❌ HOÀN TOÀN KHÔNG CẦN GỌI: productRepository.save(product);
+        // (Dòng gọi .save() ở đây là thừa thãi 100%)
+    } // 👈 KHI HÀM KẾT THÚC: Hibernate tự động so sánh Snapshot và sinh câu SQL UPDATE!
+}
+```
+
+**👉 Cơ chế:**
+* Khi có `@Transactional`, đối tượng `product` lấy từ `findById` sẽ nằm trong trạng thái được Hibernate giám sát (**Managed**).
+* Khi hàm chạy đến dấu đóng ngoặc nhọn `}` cuối cùng, Transaction kết thúc $\rightarrow$ Hibernate kích hoạt **Dirty Checking** (so sánh với Snapshot ban đầu) $\rightarrow$ Thấy `price` bị đổi $\rightarrow$ Tự động bắn SQL `UPDATE products SET price = ? WHERE id = ?` xuống Database!
+
+#### 🔹 Kịch bản 2: KHÔNG CÓ `@Transactional` (Sẽ KHÔNG lưu gì cả!)
+```java
+@Service
+public class ProductService {
+
+    // ❌ KHÔNG CÓ @Transactional
+    public void updatePrice(Long id, Double newPrice) {
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Not found"));
+
+        product.setPrice(newPrice);
+        // Kết thúc hàm: Dữ liệu biến mất, DB KHÔNG ĐỔI GÌ CẢ!
+    }
+}
+```
+
+**👉 Lý do:**
+* Vì không có `@Transactional`, hàm `findById` chỉ mở kết nối SELECT xong là đóng lại ngay.
+* Đối tượng `product` lúc này trở thành **Detached** (bị tách rời, không còn ai giám sát, không còn snapshot).
+* Lúc này bạn có gọi bao nhiêu hàm `set...` thì nó cũng chỉ thay đổi trên bộ nhớ RAM tạm thời của biến đó rồi biến mất.
+* Muốn lưu trong kịch bản này, bạn bắt buộc phải gọi tay: `productRepository.save(product)`.
+
 ---
 
 ## PHẦN 2: 🧱 ACID PROPERTIES — 4 TÍNH CHẤT NỀN TẢNG
