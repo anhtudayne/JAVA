@@ -2,6 +2,7 @@ package com.example.springbootlearning.service;
 
 import com.example.springbootlearning.dto.request.ProductCreateRequest;
 import com.example.springbootlearning.dto.request.ProductUpdateRequest;
+import com.example.springbootlearning.dto.response.PagedResponse;
 import com.example.springbootlearning.dto.response.ProductResponse;
 import com.example.springbootlearning.exception.DuplicateResourceException;
 import com.example.springbootlearning.exception.ResourceNotFoundException;
@@ -249,5 +250,40 @@ public class ProductService {
 
         productRepository.deleteById(id);
         log.info("🗑️ Product deleted: id={}", id);
+    }
+
+    // ================================================================
+    // 📘 BÀI 11: PAGINATION, SORTING & SPECIFICATIONS
+    // ================================================================
+
+    /**
+     * Lấy danh sách sản phẩm phân trang và sắp xếp an toàn qua Pageable.
+     */
+    @Transactional(readOnly = true)
+    public PagedResponse<ProductResponse> getProductsPaged(org.springframework.data.domain.Pageable pageable) {
+        log.debug("Lấy danh sách products phân trang: page={}, size={}, sort={}",
+                pageable.getPageNumber(), pageable.getPageSize(), pageable.getSort());
+        org.springframework.data.domain.Page<ProductResponse> page = productRepository.findAll(pageable)
+                .map(ProductResponse::fromEntity);
+        return PagedResponse.from(page);
+    }
+
+    /**
+     * Tìm kiếm và lọc sản phẩm động (Dynamic Query) bằng Specification pattern kết hợp phân trang.
+     */
+    @Transactional(readOnly = true)
+    public PagedResponse<ProductResponse> searchProductsDynamic(
+            String keyword, String category, Double minPrice, Double maxPrice,
+            Boolean inStock, org.springframework.data.domain.Pageable pageable) {
+        log.debug("Tìm kiếm sản phẩm động: keyword='{}', category='{}', minPrice={}, maxPrice={}, inStock={}",
+                keyword, category, minPrice, maxPrice, inStock);
+
+        org.springframework.data.jpa.domain.Specification<Product> spec =
+                com.example.springbootlearning.specification.ProductSpecification.buildFilter(
+                        keyword, category, minPrice, maxPrice, inStock
+                );
+        org.springframework.data.domain.Page<ProductResponse> page = productRepository.findAll(spec, pageable)
+                .map(ProductResponse::fromEntity);
+        return PagedResponse.from(page);
     }
 }

@@ -79,4 +79,40 @@ public class UserController {
         userService.deleteUser(id);
         return "Đã xóa user với id: " + id;
     }
+
+    // ================================================================
+    // 📘 BÀI 11: PAGINATION & SPECIFICATION ENDPOINTS CHO USER
+    // ================================================================
+
+    // ===== GET /api/users/paged — Lấy users phân trang =====
+    @GetMapping("/paged")
+    public com.example.springbootlearning.dto.response.PagedResponse<User> getUsersPaged(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "id") String sortBy,
+            @RequestParam(defaultValue = "asc") String direction
+    ) {
+        org.springframework.data.domain.Sort.Direction dir =
+                "desc".equalsIgnoreCase(direction) ? org.springframework.data.domain.Sort.Direction.DESC : org.springframework.data.domain.Sort.Direction.ASC;
+        org.springframework.data.domain.Pageable pageable =
+                org.springframework.data.domain.PageRequest.of(page, size, org.springframework.data.domain.Sort.by(dir, sortBy));
+        return com.example.springbootlearning.dto.response.PagedResponse.from(userService.getUsersPaged(pageable));
+    }
+
+    // ===== GET /api/users/search — Tìm kiếm users động với Specification =====
+    @GetMapping("/search")
+    public com.example.springbootlearning.dto.response.PagedResponse<User> searchUsers(
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) String email,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "id") String sortBy,
+            @RequestParam(defaultValue = "asc") String direction
+    ) {
+        org.springframework.data.domain.Sort.Direction dir =
+                "desc".equalsIgnoreCase(direction) ? org.springframework.data.domain.Sort.Direction.DESC : org.springframework.data.domain.Sort.Direction.ASC;
+        org.springframework.data.domain.Pageable pageable =
+                org.springframework.data.domain.PageRequest.of(page, size, org.springframework.data.domain.Sort.by(dir, sortBy));
+        return com.example.springbootlearning.dto.response.PagedResponse.from(userService.searchUsersDynamic(name, email, pageable));
+    }
 }

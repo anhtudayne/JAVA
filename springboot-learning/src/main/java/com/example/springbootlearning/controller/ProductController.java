@@ -3,11 +3,15 @@ package com.example.springbootlearning.controller;
 import com.example.springbootlearning.dto.request.ProductCreateRequest;
 import com.example.springbootlearning.dto.request.ProductUpdateRequest;
 import com.example.springbootlearning.dto.response.ApiResponse;
+import com.example.springbootlearning.dto.response.PagedResponse;
 import com.example.springbootlearning.dto.response.ProductResponse;
 import com.example.springbootlearning.service.ProductService;
 import io.swagger.v3.oas.annotations.Hidden;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -327,6 +331,84 @@ public class ProductController {
 
         return ResponseEntity.ok(
                 ApiResponse.success("Đọc HTTP headers thành công", headers)
+        );
+    }
+
+    // ================================================================
+    // ⑨ GET — Phân trang & Sắp xếp với Pageable (📘 BÀI 11)
+    // ================================================================
+    @Operation(
+            summary = "Lấy danh sách sản phẩm phân trang & sắp xếp",
+            description = "Phân trang an toàn với Pageable: page (0-indexed), size, sortBy, direction."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "✅ Lấy danh sách phân trang thành công")
+    })
+    @GetMapping("/paged")
+    public ResponseEntity<ApiResponse<PagedResponse<ProductResponse>>> getProductsPaged(
+            @Parameter(description = "Chỉ số trang (bắt đầu từ 0)", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Số lượng phần tử mỗi trang", example = "10")
+            @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "Trường cần sắp xếp", example = "id")
+            @RequestParam(defaultValue = "id") String sortBy,
+            @Parameter(description = "Chiều sắp xếp (asc hoặc desc)", example = "asc")
+            @RequestParam(defaultValue = "asc") String direction
+    ) {
+        log.info("📥 GET /api/v1/products/paged — page={}, size={}, sortBy={}, direction={}",
+                page, size, sortBy, direction);
+
+        Sort.Direction dir = "desc".equalsIgnoreCase(direction) ? Sort.Direction.DESC : Sort.Direction.ASC;
+        Pageable pageable = PageRequest.of(page, size, Sort.by(dir, sortBy));
+
+        PagedResponse<ProductResponse> response = productService.getProductsPaged(pageable);
+        return ResponseEntity.ok(
+                ApiResponse.success("Lấy danh sách sản phẩm phân trang thành công", response)
+        );
+    }
+
+    // ================================================================
+    // ⑩ GET — Tìm kiếm & Lọc động với Specification (📘 BÀI 11)
+    // ================================================================
+    @Operation(
+            summary = "Tìm kiếm & lọc sản phẩm nâng cao (Dynamic Query với Specification)",
+            description = "Tìm kiếm động theo keyword, category, khoảng giá (minPrice, maxPrice), trạng thái còn hàng (inStock), kết hợp phân trang và sắp xếp."
+    )
+    @ApiResponses({
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "✅ Tìm kiếm nâng cao thành công")
+    })
+    @GetMapping("/search/dynamic")
+    public ResponseEntity<ApiResponse<PagedResponse<ProductResponse>>> searchProductsDynamic(
+            @Parameter(description = "Từ khóa tìm kiếm trong tên sản phẩm", example = "MacBook")
+            @RequestParam(required = false) String keyword,
+            @Parameter(description = "Danh mục sản phẩm", example = "Laptop")
+            @RequestParam(required = false) String category,
+            @Parameter(description = "Giá tối thiểu (USD)", example = "500")
+            @RequestParam(required = false) Double minPrice,
+            @Parameter(description = "Giá tối đa (USD)", example = "3000")
+            @RequestParam(required = false) Double maxPrice,
+            @Parameter(description = "Chỉ lấy sản phẩm còn hàng trong kho (true/false)", example = "true")
+            @RequestParam(required = false) Boolean inStock,
+            @Parameter(description = "Chỉ số trang (0-indexed)", example = "0")
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Số lượng phần tử mỗi trang", example = "10")
+            @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "Trường cần sắp xếp", example = "price")
+            @RequestParam(defaultValue = "price") String sortBy,
+            @Parameter(description = "Chiều sắp xếp (asc hoặc desc)", example = "asc")
+            @RequestParam(defaultValue = "asc") String direction
+    ) {
+        log.info("📥 GET /api/v1/products/search/dynamic — keyword={}, category={}, minPrice={}, maxPrice={}, inStock={}, page={}, size={}",
+                keyword, category, minPrice, maxPrice, inStock, page, size);
+
+        Sort.Direction dir = "desc".equalsIgnoreCase(direction) ? Sort.Direction.DESC : Sort.Direction.ASC;
+        Pageable pageable = PageRequest.of(page, size, Sort.by(dir, sortBy));
+
+        PagedResponse<ProductResponse> response = productService.searchProductsDynamic(
+                keyword, category, minPrice, maxPrice, inStock, pageable
+        );
+        return ResponseEntity.ok(
+                ApiResponse.success("Tìm kiếm sản phẩm thành công", response)
         );
     }
 }

@@ -1,32 +1,19 @@
 package com.example.springbootlearning.model;
 
 import jakarta.persistence.*;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
-import java.time.LocalDateTime;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
- * 📘 BÀI 9 — Product Entity (JPA & Hibernate ORM)
+ * 📘 BÀI 10 — Product Entity (JPA & Hibernate ORM)
  *
- * Chuyển đổi từ POJO thuần sang JPA Entity được ánh xạ với bảng `products` trong Database.
- *
- * Các annotation chính của JPA/Hibernate:
- *   - @Entity: Đánh dấu class này là 1 Entity được quản lý bởi JPA/Hibernate.
- *   - @Table(name = "products"): Chỉ định tên bảng trong cơ sở dữ liệu.
- *   - @Id: Khóa chính (Primary Key).
- *   - @GeneratedValue(strategy = GenerationType.IDENTITY): Khóa chính tự tăng (Auto-increment).
- *   - @Column: Tùy biến cột (tên cột, độ dài, ràng buộc nullable, unique, updatable).
- *   - @CreationTimestamp: Tự gán thời điểm tạo khi INSERT (Hibernate tự động).
- *   - @UpdateTimestamp: Tự gán thời điểm sửa khi UPDATE (Hibernate tự động).
- *
- * ⚠️ Bắt buộc theo đặc tả JPA:
- *   1. Phải có Constructor không tham số (No-args constructor) để Hibernate khởi tạo qua Reflection.
- *   2. Class không được là `final` để Hibernate có thể tạo CGLIB/ByteBuddy Proxy cho Lazy Loading.
+ * Mở rộng:
+ *   - @ManyToMany với Tag thông qua bảng trung gian `product_tags` (OWNING SIDE).
  */
 @Entity
 @Table(name = "products")
-public class Product {
+public class Product extends BaseAuditableEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -47,13 +34,20 @@ public class Product {
     @Column(name = "stock", nullable = false)
     private Integer stock;
 
-    @CreationTimestamp
-    @Column(name = "created_at", updatable = false)
-    private LocalDateTime createdAt;
-
-    @UpdateTimestamp
-    @Column(name = "updated_at")
-    private LocalDateTime updatedAt;
+    /**
+     * 🔑 OWNING SIDE của quan hệ @ManyToMany:
+     * - @JoinTable: Khai báo bảng nối trung gian `product_tags`
+     * - joinColumns: Khóa ngoại trỏ về bảng hiện tại (`products`)
+     * - inverseJoinColumns: Khóa ngoại trỏ về bảng đối ứng (`tags`)
+     * - Dùng Set<Tag> để tối ưu hiệu năng xóa liên kết (tránh delete all + re-insert)
+     */
+    @ManyToMany(fetch = FetchType.LAZY, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
+    @JoinTable(
+            name = "product_tags",
+            joinColumns = @JoinColumn(name = "product_id"),
+            inverseJoinColumns = @JoinColumn(name = "tag_id")
+    )
+    private Set<Tag> tags = new HashSet<>();
 
     // ===== Constructors =====
 
@@ -74,6 +68,17 @@ public class Product {
         this.price = price;
         this.category = category;
         this.stock = stock;
+    }
+
+    // ===== Helper Methods cho quan hệ N-N =====
+    public void addTag(Tag tag) {
+        this.tags.add(tag);
+        tag.getProducts().add(this);
+    }
+
+    public void removeTag(Tag tag) {
+        this.tags.remove(tag);
+        tag.getProducts().remove(this);
     }
 
     // ===== Getters & Setters =====
@@ -126,20 +131,25 @@ public class Product {
         this.stock = stock;
     }
 
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
+    public Set<Tag> getTags() {
+        return tags;
     }
 
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
+    public void setTags(Set<Tag> tags) {
+        this.tags = tags;
     }
 
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
+    // ===== Chuẩn equals và hashCode cho JPA Entity =====
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Product product)) return false;
+        return id != null && id.equals(product.getId());
     }
 
-    public void setUpdatedAt(LocalDateTime updatedAt) {
-        this.updatedAt = updatedAt;
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
     }
 
     @Override

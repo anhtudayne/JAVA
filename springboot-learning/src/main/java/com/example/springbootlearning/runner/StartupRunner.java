@@ -33,15 +33,15 @@ public class StartupRunner implements CommandLineRunner {
         System.out.println("║    GET    /api/users           POST   /api/users                      ║");
         System.out.println("║    GET    /api/users/{id}      DELETE /api/users/{id}                  ║");
         System.out.println("║                                                                       ║");
-        System.out.println("║  (Bài 4) Product CRUD API:                                            ║");
-        System.out.println("║    GET    /api/v1/products                 (filter: ?category=&minPrice=&maxPrice=) ║");
+        System.out.println("║  (Bài 4 & 11) Product API:                                          ║");
+        System.out.println("║    GET    /api/v1/products                 (basic filter)              ║");
+        System.out.println("║    GET    /api/v1/products/paged           (Pageable: page, size, sort)║");
+        System.out.println("║    GET    /api/v1/products/search/dynamic  (Specification query builder)║");
         System.out.println("║    GET    /api/v1/products/{id}            (@PathVariable)             ║");
-        System.out.println("║    GET    /api/v1/products/search?keyword= (@RequestParam)             ║");
         System.out.println("║    POST   /api/v1/products                 (@RequestBody JSON)         ║");
         System.out.println("║    PUT    /api/v1/products/{id}            (Replace toàn bộ)           ║");
         System.out.println("║    PATCH  /api/v1/products/{id}            (Cập nhật một phần)         ║");
         System.out.println("║    DELETE /api/v1/products/{id}                                        ║");
-        System.out.println("║    GET    /api/v1/products/debug/headers   (@RequestHeader)            ║");
         System.out.println("╚═══════════════════════════════════════════════════════════════════════╝");
         System.out.println();
 

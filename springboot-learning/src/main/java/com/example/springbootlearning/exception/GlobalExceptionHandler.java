@@ -116,7 +116,19 @@ public class GlobalExceptionHandler {
     }
 
     // ================================================================
-    // ⑤ Exception — Catch-all (LUÔN ĐẶT CUỐI CÙNG!)
+    // ⑤ IllegalStateException → 400 Bad Request (Lỗi trạng thái nghiệp vụ, ví dụ: hết hàng, order đã hủy)
+    // ================================================================
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiResponse<?>> handleIllegalStateException(IllegalStateException ex) {
+        log.warn("⚠️ Business logic conflict: {}", ex.getMessage());
+
+        return ResponseEntity
+                .badRequest() // 400
+                .body(ApiResponse.error(HttpStatus.BAD_REQUEST.value(), ex.getMessage()));
+    }
+
+    // ================================================================
+    // ⑥ Exception — Catch-all (LUÔN ĐẶT CUỐI CÙNG!)
     // ================================================================
     // 🩺 BÀI 9: Bắt lỗi khi không tìm thấy Static Resource (ví dụ favicon.ico)
     // Trả về 404 gọn gàng, tránh bị Exception.class bắt và log error 500

@@ -108,4 +108,30 @@ public class UserService {
         userRepository.deleteById(id);
         log.info("Đã xóa user với id={}", id);
     }
+
+    // ================================================================
+    // 📘 BÀI 11: PAGINATION, SORTING & SPECIFICATIONS (USER)
+    // ================================================================
+
+    /**
+     * Lấy danh sách users phân trang và sắp xếp.
+     */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<User> getUsersPaged(org.springframework.data.domain.Pageable pageable) {
+        log.debug("Lấy danh sách users phân trang: page={}, size={}, sort={}",
+                pageable.getPageNumber(), pageable.getPageSize(), pageable.getSort());
+        return userRepository.findAll(pageable);
+    }
+
+    /**
+     * Tìm kiếm users động bằng Specification pattern kết hợp phân trang.
+     */
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<User> searchUsersDynamic(
+            String name, String email, org.springframework.data.domain.Pageable pageable) {
+        log.debug("Tìm kiếm users động: name='{}', email='{}'", name, email);
+        org.springframework.data.jpa.domain.Specification<User> spec =
+                com.example.springbootlearning.specification.UserSpecification.buildFilter(name, email);
+        return userRepository.findAll(spec, pageable);
+    }
 }

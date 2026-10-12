@@ -1400,10 +1400,10 @@ Chuyển User API từ in-memory List sang MySQL/PostgreSQL thật.
 ## 📘 Bài 10: Entity Relationships & Query Methods
 
 ### 🎯 Mục tiêu bài học
-- [ ] Hiểu và triển khai các loại relationship: `@OneToOne`, `@OneToMany`, `@ManyToOne`, `@ManyToMany`
-- [ ] Hiểu `FetchType.LAZY` vs `FetchType.EAGER` và bẫy N+1 query
-- [ ] Sử dụng Query Methods (Derived Queries) — Spring tự tạo SQL từ tên method
-- [ ] Viết custom query với `@Query` (JPQL & Native SQL)
+- [x] Hiểu và triển khai các loại relationship: `@OneToOne`, `@OneToMany`, `@ManyToOne`, `@ManyToMany`
+- [x] Hiểu `FetchType.LAZY` vs `FetchType.EAGER` và bẫy N+1 query
+- [x] Sử dụng Query Methods (Derived Queries) — Spring tự tạo SQL từ tên method
+- [x] Viết custom query với `@Query` (JPQL & Native SQL)
 
 ### 📖 Nội dung lý thuyết
 
@@ -1487,10 +1487,10 @@ Mở rộng project: thêm Entity Order, Product, thiết lập relationships, v
 ## 📘 Bài 11: Pagination, Sorting & Specifications
 
 ### 🎯 Mục tiêu bài học
-- [ ] Phân trang dữ liệu với `Pageable` và `Page<T>`
-- [ ] Sắp xếp dữ liệu với `Sort`
-- [ ] Sử dụng Specification pattern cho dynamic query (tìm kiếm nâng cao)
-- [ ] Áp dụng Auditing: tự động ghi `createdBy`, `createdDate`, `lastModifiedBy`, `lastModifiedDate`
+- [x] Phân trang dữ liệu với `Pageable` và `Page<T>`
+- [x] Sắp xếp dữ liệu với `Sort`
+- [x] Sử dụng Specification pattern cho dynamic query (tìm kiếm nâng cao)
+- [x] Áp dụng Auditing: tự động ghi `createdBy`, `createdDate`, `lastModifiedBy`, `lastModifiedDate`
 
 ### 📖 Nội dung lý thuyết
 
@@ -1551,11 +1551,11 @@ Thêm API tìm kiếm nâng cao với phân trang, sắp xếp, và lọc độn
 ## 📘 Bài 12: Transaction Management
 
 ### 🎯 Mục tiêu bài học
-- [ ] Hiểu ACID properties và tại sao Transaction quan trọng
-- [ ] Sử dụng `@Transactional` đúng cách
-- [ ] Hiểu Propagation levels và Isolation levels
-- [ ] Hiểu giới hạn của `@Transactional` với hệ thống bên ngoài (distributed transaction)
-- [ ] Tránh các lỗi thường gặp với `@Transactional`
+- [x] Hiểu ACID properties và tại sao Transaction quan trọng
+- [x] Sử dụng `@Transactional` đúng cách
+- [x] Hiểu Propagation levels và Isolation levels
+- [x] Hiểu giới hạn của `@Transactional` với hệ thống bên ngoài (distributed transaction)
+- [x] Tránh các lỗi thường gặp với `@Transactional`
 
 ### 📖 Nội dung lý thuyết
 
