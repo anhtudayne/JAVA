@@ -73,9 +73,23 @@ graph LR
 
 ## PHẦN 2: 🧬 BẢN CHẤT OWNING SIDE VS INVERSE SIDE
 
-Khi bạn tạo một quan hệ hai chiều (**Bidirectional Relationship**) trong Java, Hibernate sẽ bối rối: **Nếu cả User giữ List<Order> và Order giữ User, thì khi có thay đổi, Hibernate phải cập nhật cột khóa ngoại `user_id` ở bảng nào?**
+### 2.1. Nguồn gốc của sự "bối rối" trong JPA/Hibernate
+Khi bạn tạo một quan hệ hai chiều (**Bidirectional Relationship**) trong Java, bạn sẽ gặp một mâu thuẫn lớn giữa **Tư duy Cơ sở dữ liệu (SQL)** và **Tư duy Lập trình Hướng đối tượng (Java)**:
 
-Để giải quyết mâu thuẫn này, JPA đưa ra quy tắc: **Owning Side** và **Inverse Side**.
+* **🔹 Trong Cơ sở dữ liệu quan hệ (RDBMS):**
+  * Quan hệ 1 - N giữa bảng `users` và bảng `orders`: Bảng `orders` có cột khóa ngoại **`user_id`**.
+  * Bảng `users` **không có cột nào** chứa danh sách order cả (vì Database không thể lưu cả mảng con trỏ vào một ô).
+  * 👉 **Chân lý duy nhất trong Database:** Muốn biết đơn hàng này của ai, chỉ cần nhìn vào cột **`orders.user_id`**.
+* **🔹 Trong Java (OOP):**
+  * Để lập trình viên thao tác thuận tiện theo cả hai chiều trên bộ nhớ RAM, bạn khai báo:
+    * Class `Order` có biến: `private User user;`
+    * Class `User` có biến: `private List<Order> orders;`
+  * Cả 2 đối tượng đều trỏ tới nhau trên bộ nhớ RAM.
+
+> [!IMPORTANT]
+> **"Hibernate bối rối" nghĩa là gì?**  
+> Khi cả 2 đối tượng đều trỏ tới nhau trong Java, nếu lập trình viên vô tình gán mâu thuẫn (hoặc chỉ gán 1 bên), **Hibernate không biết phải dựa vào biến của Entity nào (`User` hay `Order`) để quyết định cập nhật giá trị cho cột khóa ngoại `user_id` trong Database**.  
+> Do đó, JPA đưa ra quy tắc: **Phải dùng `mappedBy` để chỉ định rõ ràng Entity nào là người có tiếng nói duy nhất (Single Source of Truth).**
 
 ```mermaid
 classDiagram
@@ -96,21 +110,123 @@ classDiagram
     Order "*" --> "1" User : @JoinColumn(name = 'user_id') (Owning Side - Controls FK)
 ```
 
-### 1. Định nghĩa kỹ thuật:
-- **Owning Side (Bên sở hữu):** Là entity **nắm giữ cột Foreign Key vật lý trong database**. Mọi thay đổi trên field của Owning Side sẽ kích hoạt câu lệnh `INSERT` hoặc `UPDATE` khóa ngoại xuống database. Dấu hiệu: **Có `@JoinColumn` hoặc `@JoinTable`, KHÔNG có thuộc tính `mappedBy`**.
-- **Inverse Side (Bên bị sở hữu / Mirror Side):** Là entity liên kết ngược lại để tiện duyệt object trong Java. Thuộc tính này hoàn toàn vô hình đối với việc sinh câu lệnh SQL ghi Foreign Key. Dấu hiệu: **Luôn có `mappedBy = "<tên field bên owning side>"`**.
+---
 
-### 2. Quy tắc ghi nhớ sống còn:
+### 2.2. Định nghĩa kỹ thuật: Owning Side vs Inverse Side
+
+| Tiêu chí | Owning Side (Bên sở hữu) | Inverse Side (Bên bị sở hữu / Mirror Side) |
+| :--- | :--- | :--- |
+| **Entity đại diện** | `Order` | `User` |
+| **Thuộc tính khai báo** | `@ManyToOne`<br>`@JoinColumn(name = "user_id")` | `@OneToMany(mappedBy = "user")` |
+| **Bản chất** | **Nắm giữ cột Foreign Key vật lý trong Database**. Mọi thay đổi trên field của Owning Side sẽ kích hoạt câu lệnh `INSERT` hoặc `UPDATE` khóa ngoại xuống database. | **Bên gương soi (Read-Only đối với khóa ngoại)**: Dùng để duyệt object thuận tiện trên RAM. Hoàn toàn vô hình đối với việc sinh câu lệnh SQL ghi Foreign Key. |
+| **Dấu hiệu nhận biết** | Có `@JoinColumn` hoặc `@JoinTable`, **KHÔNG** có thuộc tính `mappedBy`. | **Luôn luôn có `mappedBy = "<tên field bên owning side>"`**. |
+
+---
+
+### 2.3. Giải đáp thắc mắc: "Bên User không có khóa ngoại thì truy vấn & tham chiếu kiểu gì?"
+
+#### 1. Câu lệnh SQL từ bảng `users` JOIN sang bảng `orders`
+Dù bảng `users` **không hề có khóa ngoại**, câu lệnh SQL vẫn cực kỳ đơn giản:
+
+```sql
+SELECT 
+    u.id AS user_id,
+    u.name AS user_name,
+    o.id AS order_id,
+    o.total_amount
+FROM users u
+LEFT JOIN orders o ON u.id = o.user_id   -- <-- CHÍNH LÀ CHỖ NÀY!
+WHERE u.id = 1;
+```
+*(Thường dùng `LEFT JOIN` để nếu User đó chưa mua đơn hàng nào thì thông tin của User vẫn hiển thị ra).*
+
+#### 2. Bên `users` không có khóa ngoại, vậy tham chiếu kiểu gì?
+Trong thế giới Cơ sở dữ liệu quan hệ (RDBMS): **Khóa ngoại KHÔNG PHẢI là mũi tên 1 chiều**, mà nó là **một chiếc cầu nối 2 chiều bình đẳng**.
+
+Hãy nhìn dữ liệu thực tế:
+
+**Bảng `users` (Chỉ có Khóa chính `id`)**:
+| id (PK) | name |
+| :--- | :--- |
+| **1** | Alice |
+| **2** | Bob |
+
+**Bảng `orders` (Có Khóa ngoại `user_id`)**:
+| id | total_amount | user_id (FK) |
+| :--- | :--- | :--- |
+| 101 | 250.0 | **1** |
+| 102 | 100.0 | **1** |
+| 103 | 50.0 | **2** |
+
+Khi thực hiện phép `JOIN`:
+* Database không quan tâm ai là "chủ" hay ai có "khóa ngoại".
+* Database chỉ làm một phép toán logic so khớp: *"Tìm tất cả các dòng ở bảng `orders` mà có `orders.user_id = users.id`"*.
+* Dù bạn đứng từ `users` nhìn sang `orders`, hay từ `orders` nhìn về `users`, thì biểu thức so sánh **vẫn y hệt nhau**: 
+  $$\text{users.id} == \text{orders.user_id}$$
+
+```mermaid
+flowchart LR
+    subgraph users [Bảng users]
+        UID["users.id = 1 (PK)"]
+    end
+    subgraph orders [Bảng orders]
+        OID1["orders.id = 101 | user_id = 1 (FK)"]
+        OID2["orders.id = 102 | user_id = 1 (FK)"]
+    end
+    UID <== "Mệnh đề: ON users.id = orders.user_id" ==> OID1
+    UID <== "Khóa ngoại đóng vai trò như cây cầu 2 chiều" ==> OID2
+```
+
+#### 3. Vậy Hibernate làm thế nào để biết cách sinh câu SQL đó?
+Chính là nhờ thuộc tính **`mappedBy = "user"`** mà bạn khai báo ở class `User`!
+
+```java
+@Entity
+public class User {
+    @Id
+    private Long id;
+
+    // mappedBy = "user" báo cho Hibernate biết:
+    // "Muốn tìm orders của tôi, hãy sang bảng Order và tìm theo trường 'user'!"
+    @OneToMany(mappedBy = "user") 
+    private List<Order> orders;
+}
+```
+
+Khi bạn viết mã Java:
+```java
+User user = userRepository.findById(1L).get();
+List<Order> orders = user.getOrders(); // Bạn gọi hàm lấy orders
+```
+
+Hibernate nhìn vào thuộc tính `mappedBy = "user"`, nó tự hiểu:
+1. À, `User` muốn lấy danh sách `orders`.
+2. Ta sẽ sang class `Order`, xem trường `user` đang ánh xạ vào cột nào trong DB (đó là cột `user_id` nhờ `@JoinColumn(name = "user_id")`).
+3. Hibernate liền tự động sinh câu lệnh SQL:
+   ```sql
+   SELECT * FROM orders WHERE user_id = 1;
+   ```
+
+> [!TIP]
+> **💡 Tóm tắt ngắn gọn:**
+> * **Ở Database:** Khóa ngoại `orders.user_id` tạo thành chiếc cầu nối giữa 2 bảng. Đứng ở bảng nào bạn cũng `JOIN` được nhờ điều kiện `u.id = o.user_id`.
+> * **Ở Hibernate:** Thuộc tính `mappedBy = "user"` chính là chiếc "biển chỉ đường" để Hibernate biết đường sang bảng `orders` tìm những dòng có `user_id = user.id`.
+
+---
+
+### 2.4. Quy tắc ghi nhớ sống còn & Hệ quả thực tế khi code
+
 > [!CAUTION]
-> **Nếu bạn chỉ gán giá trị ở Inverse Side mà quên gán ở Owning Side, Hibernate SẼ KHÔNG BAO GIỜ lưu khóa ngoại vào database!**
+> **Nếu bạn chỉ gán ở Inverse Side mà quên gán ở Owning Side, Hibernate SẼ KHÔNG BAO GIỜ lưu khóa ngoại vào database!**
 > ```java
-> // ❌ SAI LẦM PHỔ BIẾN:
-> user.getOrders().add(newOrder); 
-> // -> newOrder.user vẫn là null. Lưu xuống DB thì cột user_id trong bảng orders sẽ là NULL!
->
-> // ✅ CÁCH LÀM CHUẨN:
-> newOrder.setUser(user);        // Owning side: Hibernate dùng dòng này để set FK!
-> user.getOrders().add(newOrder); // Giữ tính nhất quán trên bộ nhớ RAM của Java
+> // ❌ SAI: Chỉ add vào User, nhưng order.getUser() vẫn là null
+> user.getOrders().add(newOrder);
+> orderRepository.save(newOrder); 
+> // -> Kết quả trong DB: cột `orders.user_id` sẽ bị NULL, vì Hibernate không quan tâm biến `orders` của User!
+> 
+> // ✅ ĐÚNG: Gán cho Owning Side (Order)
+> newOrder.setUser(user);        // Dòng này mới là dòng quyết định lưu user_id vào DB!
+> user.getOrders().add(newOrder); // Dòng này giúp đồng bộ dữ liệu trên RAM
 > ```
 
 ---
