@@ -1,6 +1,9 @@
 # 📘 BÀI 10: ENTITY RELATIONSHIPS & QUERY METHODS (SPRING DATA JPA & HIBERNATE)
 ### Tiêu chí chọn bảng để đặt khoá ngoại : Ví dụ như User và UserProfile. Đặt khoá ngoại ở bảng phụ/bảng mở rộng (UserProfile) vì UserProfile là thực thể phụ,phục vụ cho thực thể chính, tăng hiệu năng truy suất
 ### Với mối quan hệ N-N, bên dưới database sử dụng bảng trung gian, còn java object thì sẽ thể hiện mối quan hệ nhiều nhiều (Ví dụ như Tag chứa 1 Set Product và Product chứa 1 Set Tag) và tương tác với nhau qua @JoinTable . Xem chi tiết ở mục 5
+### MỤc đích của constructor và getter/setter trong Hibernate, Jackson , Spring : 
+#### constructor : Để biến dòng dữ liệu thô trong SQL thành một đối tượng Java, Hibernate sử dụng cơ chế Java Reflection tức là tạo một đối tượng rỗng trước., sau đó thông qua các setter để set
+#### getter/setter : 3 tác dụng chính( Tính đóng gói, Chuyển đổi dữ liệu sang JSON (Serialization), Phục vụ Hibernate Lazy Loading)
 > **Mục tiêu bài học:**
 > 1. Hiểu **bản chất khóa ngoại (Foreign Key)** trong RDBMS và cách JPA ánh xạ sang **Object Reference** trong Java.
 > 2. Phân biệt và làm chủ **Owning Side** vs **Inverse Side** (vai trò sống còn của `mappedBy`).
