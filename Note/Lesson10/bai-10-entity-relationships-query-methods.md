@@ -1,5 +1,6 @@
 # 📘 BÀI 10: ENTITY RELATIONSHIPS & QUERY METHODS (SPRING DATA JPA & HIBERNATE)
 ### Tiêu chí chọn bảng để đặt khoá ngoại : Ví dụ như User và UserProfile. Đặt khoá ngoại ở bảng phụ/bảng mở rộng (UserProfile) vì UserProfile là thực thể phụ,phục vụ cho thực thể chính, tăng hiệu năng truy suất
+### Với mối quan hệ N-N, bên dưới database sử dụng bảng trung gian, còn java object thì sẽ thể hiện mối quan hệ nhiều nhiều (Ví dụ như Tag chứa 1 Set Product và Product chứa 1 Set Tag) và tương tác với nhau qua @JoinTable . Xem chi tiết ở mục 5
 > **Mục tiêu bài học:**
 > 1. Hiểu **bản chất khóa ngoại (Foreign Key)** trong RDBMS và cách JPA ánh xạ sang **Object Reference** trong Java.
 > 2. Phân biệt và làm chủ **Owning Side** vs **Inverse Side** (vai trò sống còn của `mappedBy`).
