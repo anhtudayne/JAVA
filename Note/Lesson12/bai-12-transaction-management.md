@@ -984,40 +984,45 @@ public class BonusService {
 
 ## PHẦN 7: 🔒 ISOLATION LEVELS — 4 MỨC CÔ LẬP DỮ LIỆU
 
-### 7.1. Vấn đề: Concurrent Access (Truy cập đồng thời)
+### 7.1. Vấn đề: Concurrent Access & 4 Hiện tượng bất thường (Anomalies)
 
-Khi nhiều transaction chạy song song, có thể xảy ra **3 hiện tượng bất thường (anomalies)**:
+Khi hàng nghìn transaction chạy song song cùng truy cập vào cùng các dòng dữ liệu, có thể xảy ra **4 hiện tượng bất thường (anomalies)** từ nhẹ đến đặc biệt nghiêm trọng:
 
-| Anomaly | Mô tả | Ví dụ |
+| Hiện tượng (Anomaly) | Mô tả bản chất | Ví dụ thực tế |
 |:---|:---|:---|
-| 🔸 **Dirty Read** | Đọc dữ liệu mà transaction khác **chưa commit** | TX-A update stock = 0, chưa commit. TX-B đọc stock = 0 → từ chối bán. TX-A rollback → stock = 25 trở lại. TX-B đã từ chối sai! |
-| 🔸 **Non-Repeatable Read** | Đọc cùng 1 dòng 2 lần trong cùng TX nhưng ra **kết quả khác** | TX-A đọc stock = 25. TX-B update stock = 20 rồi commit. TX-A đọc lại → stock = 20 (khác lần 1!) |
-| 🔸 **Phantom Read** | Đọc cùng 1 query 2 lần nhưng **số dòng kết quả khác** | TX-A: SELECT COUNT(*) FROM products WHERE category='Laptop' = 5. TX-B INSERT thêm 1 laptop. TX-A chạy lại query → = 6 (xuất hiện "ma"!) |
+| 🔸 **Dirty Read** *(Đọc rác)* | Đọc phải dữ liệu đang sửa đổi mà transaction khác **CHƯA COMMIT**. | TX-A giảm số dư từ 1.000.000đ về 0đ (chưa commit). TX-B vào đọc thấy 0đ $\rightarrow$ từ chối thanh toán. Sau đó TX-A bị lỗi Rollback về 1.000.000đ. TX-B đã đọc phải dữ liệu "bóng ma" sai sự thật! |
+| 🔸 **Non-Repeatable Read** *(Đọc không lặp lại)* | Đọc cùng 1 dòng dữ liệu 2 lần trong cùng một Transaction nhưng nhận về **2 giá trị khác nhau** (do có TX khác xen vào UPDATE và COMMIT). | TX-A đọc số dư tài khoản = 1.000.000đ. TX-B trừ phí tài khoản 50.000đ và COMMIT. TX-A đọc lại dòng đó thì thấy = 950.000đ! |
+| 🔸 **Phantom Read** *(Đọc bóng ma)* | Thực hiện cùng 1 câu truy vấn điều kiện 2 lần nhưng **số lượng dòng trả về khác nhau** (do có TX khác INSERT thêm hoặc DELETE bớt dòng thỏa mãn). | TX-A: `SELECT COUNT(*) WHERE price > 500` $\rightarrow$ ra 5 sản phẩm. TX-B INSERT thêm 1 sản phẩm giá 600 và COMMIT. TX-A đếm lại $\rightarrow$ ra 6 sản phẩm (dòng mới xuất hiện như "ma")! |
+| 🔸 **Write Skew** *(Lệch ghi)* | Hai transaction cùng đọc một tập dữ liệu, dựa trên điều kiện hợp lệ để cập nhật 2 dòng dữ liệu khác nhau, nhưng kết quả kết hợp lại **vi phạm ràng buộc logic toàn cục**. | Hai bác sĩ cùng trực ca, cùng bấm xin nghỉ trực vì thấy người kia còn trực $\rightarrow$ cuối cùng không còn ai trực! |
 
-### 7.2. Bảng 4 Isolation Levels
+---
 
-| Isolation Level | Dirty Read | Non-Repeatable Read | Phantom Read | Performance | Use case |
+### 7.2. Bảng tổng hợp 4 mức cô lập (Isolation Levels)
+
+| Mức độ cô lập | Dirty Read | Non-Repeatable Read | Phantom Read | Hiệu năng (Throughput) | Môi trường áp dụng |
 |:---|:---:|:---:|:---:|:---:|:---|
-| `READ_UNCOMMITTED` | ⚠️ Có thể | ⚠️ Có thể | ⚠️ Có thể | 🟢 Nhanh nhất | Hầu như không dùng |
-| `READ_COMMITTED` ⭐ | ✅ Chặn | ⚠️ Có thể | ⚠️ Có thể | 🟡 Tốt | **Default** (PostgreSQL, Oracle, H2) |
-| `REPEATABLE_READ` | ✅ Chặn | ✅ Chặn | ⚠️ Có thể | 🟠 Khá | **Default** MySQL InnoDB |
-| `SERIALIZABLE` | ✅ Chặn | ✅ Chặn | ✅ Chặn | 🔴 Chậm nhất | Tài chính, banking (cần tuyệt đối chính xác) |
+| **`READ_UNCOMMITTED`** | ⚠️ Bị dính | ⚠️ Bị dính | ⚠️ Bị dính | 🟢 Nhanh nhất (gần như không khóa) | Hầu như bị cấm trong thực tế sản xuất |
+| **`READ_COMMITTED`** ⭐ | ✅ Chặn | ⚠️ Bị dính | ⚠️ Bị dính | 🟡 Tốt, cân bằng hoàn hảo | **Default** (PostgreSQL, Oracle, SQL Server) |
+| **`REPEATABLE_READ`** | ✅ Chặn | ✅ Chặn | ⚠️ Có thể bị *(MySQL InnoDB chặn được)* | 🟠 Khá | **Default** của MySQL InnoDB |
+| **`SERIALIZABLE`** | ✅ Chặn | ✅ Chặn | ✅ Chặn (chặn cả Write Skew) | 🔴 Chậm nhất (khóa hoặc abort cao) | Nghiệp vụ tài chính, ngân hàng, sàn chứng khoán |
 
-### 7.3. Sơ đồ trực quan Isolation Levels
+---
+
+### 7.3. Sơ đồ trực quan quan hệ đánh đổi: Performance vs Consistency
 
 ```mermaid
 graph LR
     RU["READ_UNCOMMITTED<br/>🔓 Không khóa gì"]
-    RC["READ_COMMITTED<br/>🔒 Khóa khi write"]
-    RR["REPEATABLE_READ<br/>🔒🔒 Khóa khi read+write"]
-    S["SERIALIZABLE<br/>🔒🔒🔒 Khóa toàn bộ"]
+    RC["READ_COMMITTED<br/>🔒 Khóa khi Write / Dùng Undo Log"]
+    RR["REPEATABLE_READ<br/>🔒🔒 Snapshot cố định xuyên suốt TX"]
+    S["SERIALIZABLE<br/>🔒🔒🔒 Xếp hàng chạy tuần tự"]
 
     RU -->|"Chặn Dirty Read"| RC
     RC -->|"Chặn Non-Repeatable Read"| RR
-    RR -->|"Chặn Phantom Read"| S
+    RR -->|"Chặn Phantom Read & Write Skew"| S
 
     subgraph tradeoff["⚖️ Trade-off"]
-        P["Performance 🚀"] -.-> C["Consistency 🛡️"]
+        P["Performance 🚀 (Tốc độ, tải cao)"] -.-> C["Consistency 🛡️ (An toàn, chặt chẽ)"]
     end
 
     style RU fill:#ffcdd2
@@ -1026,27 +1031,138 @@ graph LR
     style S fill:#bbdefb
 ```
 
-### 7.4. Cách khai báo Isolation Level trong Spring
+---
+
+### 7.4. Chi tiết từng Isolation Level: Cơ chế & Ví dụ thực chiến
+
+#### 7.4.1. `READ_UNCOMMITTED` (Đọc dữ liệu chưa commit — Cực kỳ nguy hiểm)
+* **Bản chất:** Transaction đọc thẳng dữ liệu đang nằm trên Buffer Pool của Database mà các transaction khác đang sửa dở, **chưa hề COMMIT**.
+* **Ví dụ thực tế:**
+  ```
+  1. Transaction A: Khách hàng A nạp 500k -> UPDATE balance = 500k (CHƯA COMMIT).
+  2. Transaction B: Hệ thống quét định kỳ thấy balance = 500k -> Kích hoạt gửi quà tặng.
+  3. Transaction A: Bị lỗi mạng thẻ ngân hàng -> ROLLBACK số dư về 0k.
+  ==> Hậu quả: Khách A nhận được quà miễn phí dù tiền chưa vào tài khoản (Dirty Read)!
+  ```
+* **Khi nào dùng:** Hầu như không bao giờ dùng trong nghiệp vụ thương mại/tài chính. Chỉ chấp nhận ở các hệ thống log thô không quan trọng độ chính xác.
+
+---
+
+#### 7.4.2. `READ_COMMITTED` (Đọc dữ liệu đã commit — Chuẩn mực phổ biến nhất)
+* **Bản chất:** Chỉ cho phép đọc các bản ghi **ĐÃ COMMIT**. Nếu một transaction khác đang sửa dở, Database **không khóa chờ** mà áp dụng cơ chế **MVCC (Multi-Version Concurrency Control)**: lấy bản snapshot cũ gần nhất từ **Undo Log** đưa cho người đọc.
+  > 👉 **Nguyên lý:** *"Người Đọc không chặn Người Ghi, Người Ghi không chặn Người Đọc!"*
+* **Ví dụ thực tế:**
+  ```mermaid
+  sequenceDiagram
+      participant A as TX-A (Đang chuyển tiền)
+      participant DB as Database (Buffer + Undo Log)
+      participant B as TX-B (Đang xem số dư)
+
+      Note over DB: Ban đầu: balance = 1.000.000đ
+      A->>DB: UPDATE balance = 0đ (CHƯA COMMIT)
+      Note over DB: Sửa tạm = 0đ, lưu 1.000.000đ vào Undo Log
+      B->>DB: SELECT balance WHERE id = 1
+      Note over DB: Lấy 1.000.000đ từ Undo Log trả về cho B!
+      DB-->>B: Kết quả: 1.000.000đ (An toàn, không bị Dirty Read!)
+  ```
+* **Hạn chế:** Vẫn bị **Non-Repeatable Read**: Nếu TX-A commit thành công, sau đó TX-B query lại lần 2 thì sẽ thấy con số 0đ (khác lần 1).
+
+---
+
+#### 7.4.3. `REPEATABLE_READ` (Đọc lặp lại nhất quán)
+* **Bản chất:** Đảm bảo trong suốt vòng đời của Transaction, dù bạn có `SELECT` lại dòng dữ liệu đó bao nhiêu lần đi nữa thì **kết quả luôn luôn giống hệt nhau**, bất chấp có transaction khác xen vào UPDATE và COMMIT.
+* **Cơ chế:** Database tạo một **Snapshot bất biến** ngay tại thời điểm câu lệnh `SELECT` đầu tiên chạy. Toàn bộ các câu `SELECT` sau đều đọc từ Snapshot này.
+* **Ví dụ thực tế (Xuất báo cáo tài chính):**
+  ```java
+  @Transactional(isolation = Isolation.REPEATABLE_READ)
+  public void exportFinancialReport(Long storeId) {
+      // 1. Tính tổng doanh thu sáng nay: 50.000.000đ
+      BigDecimal revenue = storeRepo.calculateRevenue(storeId);
+
+      // (Trong lúc báo cáo đang tính toán, có đơn hàng mới được thanh toán và COMMIT...)
+
+      // 2. Kiểm tra lại để đối chiếu thuế: VẪN ĐỌC RA ĐÚNG 50.000.000đ!
+      BigDecimal checkRevenue = storeRepo.calculateRevenue(storeId);
+      // Hai con số khớp nhau hoàn toàn -> Báo cáo tài chính không bị lệch số liệu!
+  }
+  ```
+
+> [!TIP]
+> **3 Cách giải quyết Non-Repeatable Read trong thực tế:**
+> 1. **Dùng `REPEATABLE_READ`:** Cấu hình qua annotation `@Transactional(isolation = Isolation.REPEATABLE_READ)`.
+> 2. **Dùng Khóa bi quan (Pessimistic Lock):** `@Lock(LockModeType.PESSIMISTIC_WRITE)` (`SELECT ... FOR UPDATE`), khóa cứng dòng dữ liệu bắt người khác phải chờ.
+> 3. **Dùng Khóa lạc quan (Optimistic Lock) ⭐:** Thêm trường `@Version` vào Entity (hiệu năng cao nhất, không khóa DB).
+
+---
+
+#### 7.4.4. `SERIALIZABLE` (Tuần tự hóa tuyệt đối — An toàn cấp cao nhất)
+* **Bản chất:** Mức độ nghiêm ngặt nhất. Database đảm bảo kết quả giống hệt như các Transaction được **xếp hàng chạy lần lượt từng cái một**.
+* **Giải quyết triệt để lỗi "Write Skew" (Bài toán Bác sĩ trực ca):**
+  * **Quy tắc bệnh viện:** *"Phòng cấp cứu luôn phải có ÍT NHẤT 1 bác sĩ trực ca!"*
+  * Đang có 2 bác sĩ: Alice và Bob.
+  * Cùng 1 giây, cả 2 bác sĩ cùng mở máy bấm nút "Xin nghỉ trực":
+  
+  ```mermaid
+  sequenceDiagram
+      participant Alice as TX-Alice (Xin nghỉ)
+      participant DB as Database Engine
+      participant Bob as TX-Bob (Xin nghỉ)
+
+      Note over DB: Ban đầu: 2 bác sĩ đang trực (Alice, Bob)
+      Alice->>DB: 1. SELECT COUNT(*) WHERE on_call=true -> Ra 2 người
+      Bob->>DB: 2. SELECT COUNT(*) WHERE on_call=true -> Ra 2 người
+
+      Alice->>DB: 3. Thấy 2 >= 2 -> UPDATE Alice.on_call = false
+      Bob->>DB: 4. Thấy 2 >= 2 -> UPDATE Bob.on_call = false
+
+      alt Ở mức REPEATABLE READ thông thường
+          Alice->>DB: COMMIT thành công
+          Bob->>DB: COMMIT thành công
+          Note over DB: 💀 THẢM HỌA: Cả 2 cùng nghỉ, số bác sĩ trực = 0!
+      else Ở mức SERIALIZABLE ⭐
+          Alice->>DB: COMMIT thành công (Alice được nghỉ)
+          Bob->>DB: COMMIT thất bại!
+          Note over DB: DB phát hiện phụ thuộc xung đột (Serialization Failure)<br/>Ép ROLLBACK Bob! Bác sĩ trực vẫn còn 1 người (Bob)!
+      end
+  ```
+
+* **Code Java xử lý:**
+  ```java
+  @Transactional(isolation = Isolation.SERIALIZABLE)
+  public void requestDoctorLeave(String doctorName) {
+      long count = doctorRepository.countByOnCallTrue();
+      if (count <= 1) {
+          throw new BusinessException("Không thể nghỉ! Phải có ít nhất 1 bác sĩ trực.");
+      }
+      doctorRepository.setDoctorOnCall(doctorName, false);
+  }
+  ```
+* **⚠️ Cái giá phải trả khi dùng `SERIALIZABLE`:**
+  * **Tốc độ chậm:** Database phải dùng khóa khoảng (Range Lock) hoặc thuật toán kiểm tra phụ thuộc rất tốn CPU/RAM.
+  * **Dễ bị ép Rollback:** Các transaction đồng thời rất dễ bị văng lỗi `SerializationFailureException` $\rightarrow$ Lập trình viên bắt buộc phải viết thêm cơ chế **Retry** tự động.
+
+---
+
+### 7.5. Cách khai báo Isolation Level trong Spring & Lời khuyên thực chiến
 
 ```java
-// Sử dụng isolation level cụ thể
+// 1. Sử dụng Isolation Level cụ thể
 @Transactional(isolation = Isolation.READ_COMMITTED)
 public ProductResponse getProductById(Long id) { ... }
 
-// Cho các thao tác tài chính nghiêm ngặt
+// 2. Cho các giao dịch tài chính nghiêm ngặt chống xung đột chéo
 @Transactional(isolation = Isolation.SERIALIZABLE)
-public void transferMoney(Long fromId, Long toId, Double amount) { ... }
+public void transferSpecialAssets(...) { ... }
 
-// DEFAULT = sử dụng isolation level mặc định của database
+// 3. DEFAULT = Kế thừa Isolation Level mặc định của Database đang dùng
 @Transactional(isolation = Isolation.DEFAULT)
 public Order createOrder(OrderRequest request) { ... }
 ```
 
 > [!TIP]
-> **Trong thực tế**, hầu hết ứng dụng dùng `READ_COMMITTED` (mặc định) và xử lý concurrency bằng cách khác:
-> - **Optimistic Locking** (`@Version`): Kiểm tra conflict khi commit (Bài sau)
-> - **Pessimistic Locking** (`@Lock(PESSIMISTIC_WRITE)`): Khóa row khi đọc
-> - **Atomic SQL**: `UPDATE products SET stock = stock - :qty WHERE id = :id AND stock >= :qty` (đã có trong `ProductRepository.reduceStockAtomic()`)
+> **Lời khuyên vàng khi đi làm:**
+> * **Hơn 90% hệ thống thực tế:** Giữ nguyên mức mặc định `READ_COMMITTED` (hoặc `REPEATABLE_READ`), và giải quyết bài toán đồng thời bằng **Optimistic Locking (`@Version`)** hoặc **Pessimistic Locking (`@Lock`)**. Cách này giúp hệ thống đạt hàng chục nghìn lượt truy cập/giây mà không bị nghẽn mạng.
+> * **Chỉ dùng `SERIALIZABLE`:** Cho các nghiệp vụ tài chính đặc thù, khớp lệnh chứng khoán, hoặc quy tắc nghiệp vụ phức tạp liên quan đến tính toán chéo nhiều bảng/nhiều dòng mà không thể ràng buộc bằng Foreign Key/Check Constraint.
 
 ---
 
