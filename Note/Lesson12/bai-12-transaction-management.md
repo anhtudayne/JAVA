@@ -121,7 +121,91 @@ sequenceDiagram
     end
 ```
 
-### 1.3. Phân biệt thực tế: Có @Transactional vs Không có @Transactional khi cập nhật (Dirty Checking)
+### 1.3. Thắc mắc 1: Có phải các bước trong Transaction sẽ không gọi liền mà gom lại bắn 1 lượt xuống DB?
+
+Nhiều lập trình viên thắc mắc: *"Ví dụ bên trong method có 3 bước thao tác DB thì Hibernate sẽ không gọi liền từng bước mà gom cả 3 bước đó bắn cùng 1 lượt xuống Database đúng không?"*
+
+👉 **Câu trả lời:** Bạn hiểu đúng khoảng 80% về mặt hành vi kỹ thuật, nhưng bản chất thực sự của `@Transactional` rộng và quan trọng hơn thế. Cần tách rõ **2 khái niệm**:
+
+#### 1. Bản chất cốt lõi của `@Transactional`: "Tất cả hoặc không có gì" (All or Nothing)
+Mục đích sinh ra `@Transactional` không phải chỉ để gom lệnh, mà là để **bảo vệ tính toàn vẹn dữ liệu (Tính Atomicity trong ACID)**:
+* **Bước 1:** Trừ tiền ví khách hàng ($100).
+* **Bước 2:** Giảm số lượng tồn kho sản phẩm (1 cái).
+* **Bước 3:** Tạo bản ghi Đơn hàng mới.
+
+```mermaid
+flowchart TD
+    Start([Bắt đầu Transaction]) --> S1[1. Trừ tiền ví: Thành công]
+    S1 --> S2[2. Giảm tồn kho: Thành công]
+    S2 --> S3[3. Tạo đơn hàng: BỊ LỖI!]
+    S3 --> Err{Phát hiện Exception}
+    Err -->|@Transactional kích hoạt| Rollback[💥 ROLLBACK: Hủy bỏ Bước 1 & Bước 2! Dữ liệu trở về như chưa có gì xảy ra]
+```
+
+* **Nếu KHÔNG có `@Transactional`:** Bước 1 và Bước 2 đã trừ tiền và trừ kho xong, đến bước 3 server bị sập hoặc lỗi mạng $\rightarrow$ Khách bị mất tiền nhưng không có đơn hàng!
+* **CÓ `@Transactional`:** Dù có bao nhiêu bước đi nữa, chỉ cần **1 bước bị lỗi**, toàn bộ các bước trước đó đều bị **`ROLLBACK`** (Hủy bỏ hoàn toàn).
+
+#### 2. Kỹ thuật "không gọi liền mà gom lại bắn một lượt" là gì?
+Đó chính là cơ chế **"Write-Behind Cache"** và **"Flush"** của Hibernate khi chạy bên trong một Transaction:
+* **Bước 1:** `user.setBalance(...)` $\rightarrow$ Hibernate **chưa gửi lệnh SQL ngay xuống DB**. Nó chỉ ghi nhận thay đổi này vào bộ nhớ đệm RAM (*Persistence Context / Hàng đợi ActionQueue*).
+* **Bước 2:** `product.setStock(...)` $\rightarrow$ Hibernate vẫn giữ trên RAM.
+* **Bước 3:** `orderRepository.save(order)` $\rightarrow$ Tiếp tục xếp hàng trên RAM.
+
+👉 **Thời điểm "Gom một lượt" (FLUSH):**  
+Chỉ khi phương thức chạy đến dòng cuối cùng (kết thúc transaction chuẩn bị `COMMIT`), Hibernate mới thực hiện hành động gọi là **`FLUSH`**:
+* Nó gom toàn bộ các thay đổi trên RAM lại.
+* Tự động sắp xếp thứ tự tối ưu nhất (ví dụ: các lệnh `INSERT` trước, `UPDATE` sau).
+* Bắn một loạt các câu SQL (`UPDATE accounts...`, `UPDATE products...`, `INSERT INTO orders...`) xuống Database cùng một đợt!
+
+> [!WARNING]
+> **Có trường hợp nào Hibernate PHẢI bắn SQL ngay mà không chờ gom không?**
+> 1. **Khóa chính tự tăng (`IDENTITY`):** Nếu bạn tạo Entity mới và dùng `@GeneratedValue(strategy = GenerationType.IDENTITY)`, Hibernate **buộc phải chạy lệnh `INSERT` ngay lập tức** để Database sinh ra mã `ID` trả về cho Java gán vào biến đối tượng.
+> 2. **Khi bạn SELECT dữ liệu ở giữa chừng (Auto-Flush):** Ví dụ Bước 1 bạn sửa giá sản phẩm. Sang Bước 2 bạn lại viết câu truy vấn `SELECT * FROM products WHERE price = ...`. Lúc này Hibernate sẽ tự động **Flush ngay lập tức** bước 1 xuống DB để câu SELECT ở bước 2 đọc được dữ liệu mới nhất.
+
+---
+
+### 1.4. Thắc mắc 2: Cơ chế Snapshot trên RAM & Phân biệt giữa FLUSH vs COMMIT
+
+*"Có nghĩa là các bước sẽ được giữ lại trên RAM so sánh với snapshot lúc ban đầu khi chưa thực hiện step nào, sau đó commit/flush thì mới bắn câu lệnh xuống database?"*
+
+👉 **Chính xác 100%!** Bạn vừa miêu tả đúng cơ chế kinh điển của Hibernate gọi là: **Dirty Checking (Cơ chế kiểm tra dữ liệu bẩn thông qua Snapshot)**.
+
+#### 1. Cơ chế chụp ảnh (Snapshot) trên RAM
+Khi bạn đọc dữ liệu từ Database lên (ví dụ: `productRepository.findById(1L)`), Hibernate đưa Entity vào vùng nhớ **Persistence Context** trên RAM và âm thầm tạo ra **2 bản sao**:
+1. **Bản Entity thực tế:** Đưa cho bạn dùng trong code Java để bạn gọi các hàm `setter`.
+2. **Bản chụp Snapshot (Loaded State):** Bản sao nguyên gốc lúc vừa tải từ Database lên, Hibernate giữ kín để làm căn cứ đối chiếu.
+
+```mermaid
+flowchart TD
+    DB[(Database)] -->|SELECT id=1, stock=10| PC[Persistence Context trên RAM]
+    
+    subgraph RAM [Vùng nhớ RAM]
+        PC --> Snap["📸 Bản chụp Snapshot (stock = 10)"]
+        PC --> Obj["💻 Đối tượng Entity cho bạn code (stock = 10)"]
+        
+        Obj -->|Bạn gọi: product.setStock: 8| ObjUpdated["💻 Đối tượng Entity đã đổi (stock = 8)"]
+    end
+```
+
+#### 2. Đến lúc FLUSH / COMMIT: So sánh đối chiếu (Dirty Checking)
+Khi phương thức kết thúc (chuẩn bị kết thúc Transaction), Hibernate kích hoạt Dirty Checking:
+* Hibernate lấy **đối tượng Entity hiện tại** đem đi **so khớp từng trường với Bản chụp Snapshot ban đầu**.
+* **Nếu có khác biệt (Dữ liệu bị "bẩn" - Dirty):** Hibernate phát hiện: *"À! Trường `stock` ban đầu là 10, bây giờ là 8"* $\rightarrow$ Nó lập tức tự động sinh ra câu lệnh:
+  ```sql
+  UPDATE products SET stock = 8 WHERE id = 1;
+  ```
+* **Nếu KHÔNG có gì thay đổi:** (Giả sử bạn lấy ra xem nhưng không gọi setter nào, hoặc đổi rồi lại gán về giá trị cũ) $\rightarrow$ Trùng khớp với Snapshot $\rightarrow$ **Hibernate KHÔNG thèm sinh ra câu lệnh UPDATE nào cả!** (Cực kỳ tối ưu hiệu năng).
+
+#### 3. Phân biệt rõ ràng giữa FLUSH và COMMIT:
+
+| Bước | Tên gọi | Hành động thực tế |
+| :---: | :--- | :--- |
+| **1** | **FLUSH** | So sánh Entity với Snapshot $\rightarrow$ **Bắn toàn bộ các câu lệnh SQL (`INSERT`, `UPDATE`, `DELETE`) xuống Database**. Database đã nhận lệnh nhưng **chưa chốt sổ vĩnh viễn** (vẫn đang nằm trong transaction tạm, có thể rollback bất cứ lúc nào). |
+| **2** | **COMMIT** | Database gửi tín hiệu: *"Mọi thứ đều ổn"* $\rightarrow$ Database chính thức **chốt ghi vĩnh viễn vào ổ cứng** (Hoàn tất giao dịch). |
+
+---
+
+### 1.5. Thắc mắc 3: "Trong Service gọi findById xong chỉ dùng setter là tự động ghi xuống Database rồi hả?"
 
 Nhiều lập trình viên thắc mắc: *"Trong Service, ta gọi `findById()`, sau đó chỉ dùng các hàm `set...` là tự động ghi thẳng xuống database rồi hả?"*
 
@@ -388,7 +472,58 @@ public class OrderService$$SpringCGLIB extends OrderService {
 
 ## PHẦN 4: 🔄 ROLLBACK RULES — KHI NÀO ROLLBACK, KHI NÀO KHÔNG?
 
-### 4.1. Quy tắc mặc định
+### 4.1. Bản chất cơ chế Rollback bên dưới (Database vs Bộ nhớ RAM)
+
+Nhiều lập trình viên lầm tưởng rằng khi Rollback, Hibernate sẽ "sửa ngược" lại các giá trị biến Java trên RAM về như ban đầu. **Thực tế hoàn toàn không phải như vậy!**
+
+Cơ chế Rollback là sự phối hợp giữa **Spring + Hibernate (Tầng Java)** và **Database Engine (MySQL, PostgreSQL...)**:
+
+```mermaid
+sequenceDiagram
+    participant App as Code Java (RAM)
+    participant Spring as Spring Transaction Manager
+    participant DB as Database Engine (MySQL/Postgres)
+
+    Note over App,DB: BẮT ĐẦU TRANSACTION
+    Spring->>DB: Gửi lệnh: BEGIN TRANSACTION
+    
+    App->>DB: Flush SQL: UPDATE accounts SET balance = 0 WHERE id = 1
+    Note over DB: Database nhận lệnh SQL,<br/>sửa dữ liệu TẠM THỜI và ghi vào UNDO LOG
+    
+    Note over App: 💀 GẶP LỖI (Exception / Server Crash)
+    
+    alt Trường hợp 1: Có Exception trong Java
+        Spring->>DB: Gửi lệnh SQL: ROLLBACK;
+        Note over DB: Database dùng UNDO LOG<br/>khôi phục lại số dư ban đầu!
+        Note over App: Hibernate vứt bỏ Persistence Context trên RAM
+    else Trường hợp 2: Server bị sập nguồn / Mất điện
+        Note over DB: Kết nối mạng bị đứt đột ngột!<br/>Database tự động kích hoạt ROLLBACK
+    end
+```
+
+#### 🔹 1. "Rollback có nghĩa là không gửi câu lệnh xuống Database hả?"
+* **Với các lệnh chưa Flush (đang nằm trong hàng đợi ActionQueue của Hibernate):** Hibernate đơn giản là **hủy bỏ**, không gửi các câu lệnh SQL này xuống Database nữa.
+* **Với các lệnh ĐÃ Flush xuống Database:** Database đã nhận lệnh SQL và sửa tạm trong buffer pool. Nhưng vì chưa nhận được lệnh `COMMIT`, nên khi Spring gửi tín hiệu `ROLLBACK;`, Database sẽ **hủy bỏ và hoàn tác** toàn bộ các thay đổi đó.
+
+#### 🔹 2. "Có phải Rollback bằng cách đưa dữ liệu trên RAM về trạng thái Snapshot ban đầu?"
+* **HOÀN TOÀN KHÔNG!** Hibernate **không hề** sửa ngược lại các đối tượng Java trên RAM! Nếu bạn vừa gọi `user.setBalance(0)`, thì trên RAM biến `user` đó vẫn mang số dư là `0`.
+* Thay vào đó: **Hibernate vứt bỏ luôn cả phiên làm việc (đóng/clear Persistence Context)**. Toàn bộ đối tượng trên RAM bị coi như "hết hạn sử dụng" (stale/detached). Lần sau nếu cần dữ liệu, hệ thống bắt buộc phải `SELECT` lại từ Database (nơi dữ liệu đã được bảo vệ toàn vẹn).
+
+#### 🔹 3. Tầng Database làm sao để "quay ngược thời gian"? (Undo Log)
+Khi Database nhận câu lệnh `UPDATE` hay `DELETE`:
+1. Database không ghi đè ngay lên ổ đĩa chính mà ghi vào một cuốn nhật ký đặc biệt gọi là **Undo Log**:  
+   *"Trước khi sửa, tài khoản id=1 có số dư cũ là 1.000.000đ"*.
+2. Khi nhận lệnh `ROLLBACK;` (hoặc khi app bị sập làm đứt kết nối mạng): Database mở **Undo Log** ra, đọc lại giá trị cũ và **phục hồi dữ liệu về chính xác 1.000.000đ** như trước khi giao dịch bắt đầu.
+
+| Nơi lưu trữ | Trạng thái trước khi Rollback | Khi xảy ra Rollback |
+| :--- | :--- | :--- |
+| **Hàng đợi SQL của Hibernate (RAM)** | Chứa các câu SQL đang chờ bắn | **Bị xóa bỏ hoàn toàn**, không gửi xuống DB nữa. |
+| **Các Object Java (RAM)** | `user.getBalance()` đang bằng 0 | **Vẫn bằng 0**, nhưng Persistence Context bị đóng lại/vứt bỏ để tránh bị dùng nhầm. |
+| **Dữ liệu trong Database (Ổ cứng/Buffer)** | Đã nhận một số lệnh SQL tạm thời | Nhận lệnh `ROLLBACK` $\rightarrow$ Dùng **Undo Log** đảo ngược toàn bộ dữ liệu về trạng thái ban đầu 100%. |
+
+---
+
+### 4.2. Quy tắc Rollback mặc định của `@Transactional`
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
@@ -406,7 +541,9 @@ public class OrderService$$SpringCGLIB extends OrderService {
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 4.2. Phân loại Exception trong Java (Java Core Knowledge)
+---
+
+### 4.3. Phân loại Exception trong Java (Java Core Knowledge)
 
 ```mermaid
 graph TD
@@ -426,10 +563,12 @@ graph TD
     style Checked fill:#f4b400,color:#000
 ```
 
-### 4.3. Tùy chỉnh Rollback Rules
+---
+
+### 4.4. Tùy chỉnh Rollback Rules (`rollbackFor`, `noRollbackFor`)
 
 ```java
-// ✅ 1. Rollback cho TẤT CẢ exception (cả Checked)
+// ✅ 1. Rollback cho TẤT CẢ exception (cả Checked Exception)
 @Transactional(rollbackFor = Exception.class)
 public void processPayment(PaymentRequest req) throws PaymentException {
     // PaymentException (checked) sẽ gây rollback
@@ -459,10 +598,12 @@ public void complexBusinessLogic() {
 }
 ```
 
-### 4.4. Bảng so sánh rollback behavior
+---
+
+### 4.5. Bảng so sánh Rollback Behavior
 
 | Exception loại | Mặc định | Với `rollbackFor = Exception.class` |
-|:---|:---:|:---:|
+| :--- | :---: | :---: |
 | `RuntimeException` (unchecked) | ✅ Rollback | ✅ Rollback |
 | `Error` | ✅ Rollback | ✅ Rollback |
 | `IOException` (checked) | ❌ Commit | ✅ Rollback |
@@ -473,8 +614,140 @@ public void complexBusinessLogic() {
 > **Best practice trong dự án của chúng ta:** Tất cả custom exception đã kế thừa `RuntimeException` (thông qua `BusinessException`):
 > - `ResourceNotFoundException extends BusinessException extends RuntimeException`
 > - `DuplicateResourceException extends BusinessException extends RuntimeException`
->
-> → **Luôn tự động rollback theo mặc định!** Đây là thiết kế đúng đắn từ Bài 7.
+> 
+> → **Luôn tự động rollback theo mặc định!** Đây là thiết kế chuẩn từ Bài 7.
+
+---
+
+### 4.6. Chạy đến cuối Transaction thì chắc chắn dữ liệu được commit thành công?
+
+**KHÔNG HẲN!** Chạy hết dòng code Java cuối cùng **CHƯA CÓ NGHĨA** là 100% dữ liệu đã được lưu an toàn vào Database.
+
+Thực tế, **thời điểm kết thúc phương thức mới chính là lúc "sóng gió" nhất**! Bởi vì đây là lúc Hibernate bắt đầu gọi **FLUSH** và Database bắt đầu gọi **COMMIT**.
+
+```mermaid
+flowchart TD
+    EndCode["🏁 Chạy hết dòng code Java cuối cùng"] --> StepFlush["1. Hibernate thực hiện FLUSH (Bắn SQL)"]
+    
+    StepFlush -->|❌ Lỗi DB Constraint| Fail1["💥 LỖI: Trùng Unique Key, Sai Khóa ngoại...<br/>==> ROLLBACK!"]
+    
+    StepFlush -->|✅ SQL hợp lệ| StepCommit["2. Database thực hiện COMMIT (Chốt sổ)"]
+    
+    StepCommit -->|❌ Xung đột đồng thời| Fail2["💥 LỖI: Optimistic Lock (@Version), Deadlock...<br/>==> ROLLBACK!"]
+    StepCommit -->|❌ Cờ ngầm| Fail3["💥 LỖI: Transaction bị đánh dấu RollbackOnly<br/>==> ROLLBACK!"]
+    
+    StepCommit -->|✅ Thành công 100%| Success["🎉 DỮ LIỆU ĐƯỢC LƯU VĨNH VIỄN!"]
+```
+
+Dữ liệu vẫn có thể bị "lật kèo" và **bị ROLLBACK ngay tại vạch đích** vì 3 lý do:
+
+#### 1. Bị "văng" ngay lúc FLUSH: Vi phạm ràng buộc Database (DB Constraints)
+Suốt quá trình chạy trong Java, bạn mới chỉ gọi các hàm `setter` trên RAM. Đến cuối hàm, Hibernate bắn một loạt SQL xuống thì Database mới phát hiện:
+* **Trùng khóa Unique (`DataIntegrityViolationException`):** Ví dụ bạn set `email = "admin@gmail.com"`, nhưng đúng lúc đó có người khác vừa đăng ký email này trước bạn 1 mili-giây $\rightarrow$ Database từ chối câu lệnh $\rightarrow$ **ROLLBACK toàn bộ!**
+* **Vi phạm Khóa ngoại (Foreign Key):** `order.setUserId(9999L)` nhưng User 9999 không tồn tại trong DB.
+* **Cột bị `NOT NULL`:** Bạn quên set một trường bắt buộc trong DB.
+* **Dữ liệu quá dài:** Cột `VARCHAR(50)` nhưng bạn đưa chuỗi 100 ký tự.
+
+#### 2. Bị "lật kèo" ngay lúc COMMIT: Xung đột dữ liệu đồng thời (Concurrency / Locks)
+* **Xung đột Khóa Lạc Quan (Optimistic Lock - `@Version`):** Hai nhân viên cùng mở sản phẩm và sửa tồn kho. Người A commit trước thành công (`v1` $\rightarrow$ `v2`). Đến lượt người B (đang giữ `v1`), khi commit Hibernate thấy version trong DB đã là `v2` $\rightarrow$ Ném `OptimisticLockException` $\rightarrow$ **Người B bị ROLLBACK hoàn toàn!**
+* **Bế tắc khóa dữ liệu (Deadlock):** Hai transaction giữ khóa chéo nhau, Database Engine phát hiện Deadlock và sẽ chọn 1 trong 2 transaction làm "nạn nhân" (victim) $\rightarrow$ **Ép buộc hủy bỏ và ROLLBACK transaction đó.**
+
+#### 3. Cái bẫy ngầm trong Spring: `setRollbackOnly()`
+Giả sử trong phương thức của bạn có gọi một phương thức của Service khác:
+```java
+@Transactional
+public void parentMethod() {
+    // 1. Làm việc A
+    
+    try {
+        childService.doSomething(); // Phương thức này bị lỗi bên trong và ném RuntimeException
+    } catch (Exception e) {
+        // Bạn cố tình try-catch nuốt lỗi để code chạy tiếp đến cuối!
+    }
+
+    // 2. Làm việc B
+} // 👈 Đến đây chạy hết hàm bình thường, KHÔNG có Exception nào văng ra ngoài!
+```
+❓ **Dữ liệu có được commit không?**  
+👉 **KHÔNG!** Dù bạn đã `try-catch` nuốt lỗi và chạy hết hàm, nhưng khi `childService` gặp lỗi, Spring đã âm thầm đánh dấu transaction này là **`RollbackOnly`** (Chỉ được phép hủy). Khi `parentMethod` kết thúc, Spring thấy cờ này sẽ lập tức gọi `ROLLBACK` và ném lỗi:  
+`UnexpectedRollbackException: Transaction silently rolled back because it has been marked as rollback-only`.
+
+---
+
+### 4.7. Vậy khi nào dữ liệu mới thực sự ghi xuống Database thành công 100%?
+
+Dữ liệu chỉ được coi là **ghi xuống Database thành công 100%** khi thỏa mãn đồng thời cả 2 điều kiện ở tầng **Database** và tầng **Java**:
+
+#### 1. Thời điểm chính xác: "Khoảnh khắc vàng"
+> 🎯 **Dữ liệu được ghi thành công khi và chỉ khi:**  
+> Lệnh **`COMMIT`** được Database Engine thực thi trọn vẹn, ghi nhận vào ổ đĩa và gửi tín hiệu phản hồi **thành công (ACK)** ngược lại cho Spring Boot mà **không có bất kỳ Exception nào bị ném ra**.
+
+```mermaid
+sequenceDiagram
+    participant Controller
+    participant Proxy as Spring Proxy (@Transactional)
+    participant Service as OrderService
+    participant DB as Database Engine
+
+    Controller->>Proxy: Gọi createOrder()
+    Proxy->>DB: 1. BEGIN TRANSACTION
+    Proxy->>Service: Gọi code nghiệp vụ
+    Service-->>Proxy: Chạy hết dòng code cuối cùng
+    
+    Note over Proxy,DB: GIAI ĐOẠN QUYẾT ĐỊNH
+    Proxy->>DB: 2. FLUSH (Gửi SQL)
+    DB-->>Proxy: SQL hợp lệ!
+    Proxy->>DB: 3. COMMIT!
+    DB-->>Proxy: ✅ Đã chốt sổ vĩnh viễn vào ổ cứng (WAL Log)!
+    
+    Proxy-->>Controller: 4. Thoát khỏi ranh giới Transaction an toàn
+    Note over Controller: 👉 CHÍNH LÀ LÚC NÀY: Dữ liệu đã lưu thành công 100%!
+```
+
+#### 2. Dấu hiệu nhận biết trong Code thực tế
+Hãy nhìn vào tầng **Controller**:
+```java
+@PostMapping("/orders")
+public ResponseEntity<?> createOrder(@RequestBody OrderRequest request) {
+
+    // 1. Gọi Service (phương thức này có @Transactional)
+    OrderResponse response = orderService.createOrder(request);
+
+    // 👉 KHI CODE CHẠM ĐƯỢC ĐẾN DÒNG NÀY:
+    // Chắc chắn 100% dữ liệu ĐÃ LƯU THÀNH CÔNG xuống Database!
+    // Bởi vì nếu có bất kỳ lỗi nào ở bước FLUSH hay COMMIT,
+    // dòng trên sẽ ném Exception ngay lập tức và code không bao giờ chạy xuống đây.
+
+    return ResponseEntity.ok(response);
+}
+```
+
+#### 3. Về mặt vật lý (Phần cứng Database): Tính Durability (Bền vững)
+Khi lệnh `COMMIT` hoàn tất, Database đã ghi dữ liệu vào **Redo Log / WAL (Write-Ahead Logging)** trên ổ cứng:
+* Kể cả 1 mili-giây sau khi COMMIT, toàn bộ trung tâm dữ liệu bị mất điện đột ngột: Khi khởi động lại, Database sẽ đọc WAL log và **khôi phục lại 100% dữ liệu đã commit**, không bao giờ bị mất.
+
+#### 4. Kinh nghiệm thực chiến đắt giá: Khi nào nên Gửi Email / Bắn Notification?
+```java
+// ❌ SAI LẦM: Gửi email trực tiếp trong @Transactional
+@Transactional
+public void createOrder(...) {
+    orderRepository.save(order);
+    emailService.sendOrderConfirmation(order); 
+    // 💀 Nếu sau dòng này, đến cuối hàm DB bị lỗi trùng mã đơn -> ROLLBACK!
+    // Khách đã nhận được email nhưng trong DB lại KHÔNG CÓ đơn hàng nào!
+}
+```
+
+✅ **Cách làm chuẩn trong Spring Boot:**  
+Chỉ gửi email **SAU KHI CHẮC CHẮN COMMIT THÀNH CÔNG** bằng cách dùng `@TransactionalEventListener`:
+
+```java
+// Spring sẽ chỉ kích hoạt hàm này SAU KHI Database đã COMMIT thành công 100%!
+@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+public void handleOrderCreatedEvent(OrderCreatedEvent event) {
+    emailService.sendOrderConfirmation(event.getOrder());
+}
+```
 
 ---
 
