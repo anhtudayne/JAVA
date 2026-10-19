@@ -1,5 +1,6 @@
 # 📘 BÀI 13: DATABASE MIGRATION VỚI FLYWAY — QUẢN LÝ SCHEMA TIẾN HÓA CHUYÊN NGHIỆP
 
+## Hibernate ddl-auto = update --> tạo mới thuộc tính chứ không phải là sửa thuộc tính
 > **Mục tiêu bài học:**
 > 1. Hiểu rõ **tại sao `hibernate.ddl-auto=update` bị cấm tuyệt đối** trong môi trường Production và rủi ro mất dữ liệu nghiêm trọng.
 > 2. Nắm vững triết lý **Database Migration as Code** và quản lý phiên bản cơ sở dữ liệu bằng Version Control (Git).
