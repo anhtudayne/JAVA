@@ -32,22 +32,25 @@ Trong các ứng dụng doanh nghiệp thực tế, backend hiếm khi đứng �
 Spring Framework đã trải qua 4 thế hệ công cụ gọi HTTP:
 
 ```mermaid
-timeline
-    title Tiến Hóa Các HTTP Client Trong Spring Framework
-    2009 : Spring 3.0 : RestTemplate ra đời (Blocking, OOP-heavy, quá tải method overloads)
-    2017 : Spring 5.0 : WebClient xuất hiện cùng WebFlux (Non-blocking, Reactive Streams, Mono/Flux)
-    2022 : Spring 6.0 / Boot 3.0 : HTTP Interfaces (Declarative HTTP Service Client ra mắt)
-    2023 - Nay : Spring 6.1 / Boot 3.2+ : RestClient ra đời (Đồng bộ, Fluent API thanh lịch, thay thế hoàn toàn RestTemplate)
+graph LR
+    Y2009["Spring 3.0 (2009)<br/>RestTemplate ra đời"] --> Y2017["Spring 5.0 (2017)<br/>WebClient (Reactive)"]
+    Y2017 --> Y2022["Spring 6.0 (2022)<br/>HTTP Service Client"]
+    Y2022 --> Y2023["Spring 6.1 (2023)<br/>RestClient (Modern Sync)"]
+
+    style Y2009 fill:#ffebee,stroke:#e53935
+    style Y2017 fill:#fff9c4,stroke:#fbc02d
+    style Y2022 fill:#e1f5fe,stroke:#0288d1
+    style Y2023 fill:#c8e6c9,stroke:#388e3c
 ```
 
 ```mermaid
 graph TD
-    Client[Nhu cầu gọi External API] --> Q{Cần Reactive Non-blocking?}
-    Q -->|Có (High Concurrency / WebFlux)| WC["🚀 WebClient<br/>(Async, Mono/Flux, Netty)"]
-    Q -->|Không (Spring MVC thông thường)| Q2{Cách tiếp cận mong muốn?}
-    Q2 -->|Khai báo Interface sạch gọn| HSC["💎 HTTP Service Client<br/>(@HttpExchange, @GetExchange)"]
-    Q2 -->|Lập trình Fluent từng bước| RC["⚡ RestClient<br/>(Spring 6.1+ Sync Fluent API)"]
-    Q2 -->|Cũ, Legacy| RT["⚠️ RestTemplate<br/>(Chế độ bảo trì - Tránh dùng mới)"]
+    Client["Nhu cầu gọi External API"] --> Q{"Cần Reactive Non-blocking?"}
+    Q -->|"Có: Cần Reactive WebFlux"| WC["🚀 WebClient<br/>(Async, Mono/Flux, Netty)"]
+    Q -->|"Không: Spring MVC thông thường"| Q2{"Cách tiếp cận mong muốn?"}
+    Q2 -->|"Khai báo Interface sạch gọn"| HSC["💎 HTTP Service Client<br/>(@HttpExchange, @GetExchange)"]
+    Q2 -->|"Lập trình Fluent từng bước"| RC["⚡ RestClient<br/>(Spring 6.1+ Sync Fluent API)"]
+    Q2 -->|"Cũ, Legacy"| RT["⚠️ RestTemplate<br/>(Chế độ bảo trì - Tránh dùng mới)"]
 
     style RC fill:#c8e6c9,stroke:#388e3c
     style HSC fill:#bbdefb,stroke:#1976d2
@@ -117,7 +120,7 @@ sequenceDiagram
     App->>RC: restClient.get().uri("/posts/{id}", 1).retrieve()
     RC->>Ext: HTTP GET https://.../posts/1
     Ext-->>RC: HTTP 200 OK + JSON Body
-    RC-->>App: .body(PostResponse.class) -> Object deserialized
+    RC-->>App: body(PostResponse.class) tra ve Object
 ```
 
 #### ① HTTP GET — Lấy dữ liệu

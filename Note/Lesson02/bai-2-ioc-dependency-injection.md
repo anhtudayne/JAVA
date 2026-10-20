@@ -421,6 +421,9 @@ graph TD
 | **Wiring** (Lắp ráp) | Phân tích dependency → inject bean này vào bean kia |
 | **Lifecycle** (Vòng đời) | Quản lý từ lúc tạo bean đến khi destroy (sẽ học ở Bài 3) |
 
+> [!TIP]
+> 📖 **Đọc thêm chuyên đề:** Xem chi tiết kiến trúc tầng sâu, phân biệt `BeanFactory` vs `ApplicationContext`, 4 năng lực mở rộng (I18N, Event Publisher, ResourceLoader, Environment) và câu hỏi phỏng vấn tại: [bai-2-spring-context-application-context.md](file:///Users/vovantu/HTML_CSS/JAVA%20/Note/Lesson02/bai-2-spring-context-application-context.md).
+
 ### 5.2. Luồng tạo và inject beans
 
 Khi Spring Boot khởi động, ApplicationContext thực hiện:
