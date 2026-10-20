@@ -20,7 +20,7 @@
 5. [Phần 5: Mô Hình Đối Tác — HTTP Server vs HTTP Client](#phần-5-mô-hình-đối-tác--http-server-vs-http-client)
 6. [Phần 6: Gia Đình HTTP Client Trong Hệ Sinh Thái Java & Spring](#phần-6-gia-đình-http-client-trong-hệ-sinh-thái-java--spring)
 7. [Phần 7: Bảng Ma Trận So Sánh Đa Chiều](#phần-7-bảng-ma-trận-so-sánh-đa-chiều)
-8. [Phần 8: 10 Câu Hỏi Phỏng Vấn "Sát Hạch Khái Niệm" Kinh Điển](#phần-8-10-câu-hỏi-phỏng-vấn-sát-hạch-khái-niệm-kinh-điển)
+8. [Phần 8: 12 Câu Hỏi Phỏng Vấn "Sát Hạch Khái Niệm" Kinh Điển](#phần-8-12-câu-hỏi-phỏng-vấn-sát-hạch-khái-niệm-kinh-điển)
 
 ---
 
@@ -167,12 +167,12 @@ Trong tư duy REST:
 3. Thao tác trên tài nguyên phải sử dụng chính các **Động từ chuẩn của HTTP (HTTP Verbs)** thay vì nhét động từ vào URL:
    * ❌ Sai phong cách REST: `POST /api/v1/createNewUser`, `GET /api/v1/deleteUserById?id=1`
    * ✅ Chuẩn REST:
-     * `GET    /api/v1/users` $\rightarrow$ Đọc danh sách users
-     * `POST   /api/v1/users` $\rightarrow$ Tạo mới user
-     * `GET    /api/v1/users/42` $\rightarrow$ Xem chi tiết user 42
-     * `PUT    /api/v1/users/42` $\rightarrow$ Thay thế toàn bộ thông tin user 42
-     * `PATCH  /api/v1/users/42` $\rightarrow$ Cập nhật một phần user 42
-     * `DELETE /api/v1/users/42` $\rightarrow$ Xóa user 42
+     * `GET    /api/v1/users` $\rightarrow$\rightarrow$\rightarrow$ Đọc danh sách users
+     * `POST   /api/v1/users` $\rightarrow$\rightarrow$\rightarrow$ Tạo mới user
+     * `GET    /api/v1/users/42` $\rightarrow$\rightarrow$\rightarrow$ Xem chi tiết user 42
+     * `PUT    /api/v1/users/42` $\rightarrow$\rightarrow$\rightarrow$ Thay thế toàn bộ thông tin user 42
+     * `PATCH  /api/v1/users/42` $\rightarrow$\rightarrow$\rightarrow$ Cập nhật một phần user 42
+     * `DELETE /api/v1/users/42` $\rightarrow$\rightarrow$\rightarrow$ Xóa user 42
 
 ### 4.3. Bảng Thuộc Tính Quan Trọng: Safe & Idempotent
 Người phỏng vấn cực kỳ thích hỏi về tính chất của các HTTP Method trong REST:
@@ -181,9 +181,9 @@ Người phỏng vấn cực kỳ thích hỏi về tính chất của các HTTP
 | :--- | :--- | :---: | :---: |
 | **GET** | Lấy dữ liệu | ✅ CÓ (Không đổi DB) | ✅ CÓ (Gọi 1 lần hay 100 lần kết quả trả về như nhau) |
 | **HEAD** | Lấy header (không body) | ✅ CÓ | ✅ CÓ |
-| **PUT** | Ghi đè toàn bộ tài nguyên | ❌ KHÔNG (Có sửa DB) | ✅ CÓ (Ghi đè giá trị $X$ 10 lần thì giá trị vẫn là $X$) |
+| **PUT** | Ghi đè toàn bộ tài nguyên | ❌ KHÔNG (Có sửa DB) | ✅ CÓ (Ghi đè giá trị $\rightarrow$X$\rightarrow$ 10 lần thì giá trị vẫn là $\rightarrow$X$\rightarrow$) |
 | **DELETE** | Xóa tài nguyên | ❌ KHÔNG | ✅ CÓ (Xóa ID=5 một lần là mất, các lần sau vẫn là đã xóa) |
-| **POST** | Tạo mới tài nguyên | ❌ KHÔNG | ❌ **KHÔNG** (Gọi 10 lần $\rightarrow$ tạo ra 10 bản ghi mới!) |
+| **POST** | Tạo mới tài nguyên | ❌ KHÔNG | ❌ **KHÔNG** (Gọi 10 lần $\rightarrow$\rightarrow$\rightarrow$ tạo ra 10 bản ghi mới!) |
 | **PATCH** | Cập nhật một phần | ❌ KHÔNG | ⚠️ Tùy thuộc logic (cộng dồn `score += 1` thì không idempotent) |
 
 > 💡 **Khái niệm "Idempotent":** Nghĩa là dù bạn có bấm gửi request đó **1 lần hay 100 lần liên tiếp**, trạng thái dữ liệu cuối cùng trên server vẫn hoàn toàn giống nhau! (Cực kỳ quan trọng để xử lý Retry khi mạng bị chập chờn).
@@ -218,7 +218,7 @@ sequenceDiagram
 ```
 
 ### 5.1. Định nghĩa rạch ròi
-* **HTTP Server:** Là bên **thụ động lắng nghe (Listen)** trên một cổng mạng (Port 80, 443, 8080). Nó không bao giờ tự ý gửi dữ liệu cho ai nếu bên kia chưa hỏi. Nhiệm vụ của nó là nhận HTTP Request $\rightarrow$ xử lý $\rightarrow$ trả về HTTP Response.
+* **HTTP Server:** Là bên **thụ động lắng nghe (Listen)** trên một cổng mạng (Port 80, 443, 8080). Nó không bao giờ tự ý gửi dữ liệu cho ai nếu bên kia chưa hỏi. Nhiệm vụ của nó là nhận HTTP Request $\rightarrow$\rightarrow$\rightarrow$ xử lý $\rightarrow$\rightarrow$\rightarrow$ trả về HTTP Response.
   * *Ví dụ:* Embedded Tomcat trong Spring Boot, Nginx, Apache HTTPD, Node.js Express.
 * **HTTP Client:** Là bên **chủ động mở kết nối (Initiate Connection)**, đóng gói bức thư HTTP Request, bắn qua mạng tới Server và chờ nhận kết quả phản hồi.
   * *Ví dụ Client người dùng:* Trình duyệt Chrome/Safari, ứng dụng Mobile, Postman, cURL command line.
@@ -301,7 +301,112 @@ graph TD
 
 ---
 
-## PHẦN 8: 10 CÂU HỎI PHỎNG VẤN "SÁT HẠCH KHÁI NIỆM" KINH ĐIỂN
+### 7.3. Ma Trận 2 Chiều: Cơ Chế I/O & Phong Cách Lập Trình (Developer Experience)
+
+Khi tìm hiểu về 4 đại diện HTTP Client của Spring (**RestTemplate**, **RestClient**, **WebClient**, **HTTP Service Client**), rất nhiều lập trình viên lầm tưởng: *"Chúng chỉ khác nhau ở cơ chế Non-blocking I/O vs Blocking I/O"*.
+
+👉 **Đó là nhận định đúng một nửa nhưng chưa đủ!** Nếu chỉ khác nhau ở Blocking vs Non-blocking, Spring chỉ cần giữ lại `RestTemplate` và `WebClient` là xong, không việc gì phải sinh ra thêm `RestClient` và `HTTP Service Client`.
+
+Sự khác biệt thực chất nằm trên **2 TRỤC HOÀN TOÀN ĐỘC LẬP**:
+1. **Trục 1: Cơ chế I/O bên dưới (Underlying I/O Engine):** Thread bị khóa chờ mạng (**Blocking I/O**) hay Thread được giải phóng dùng Event Loop (**Non-blocking / Reactive I/O**).
+2. **Trục 2: Phong cách lập trình bên trên (Developer Experience - DX):** Gọi hàm nạp chồng rời rạc (**Overloaded Methods**) → Xâu chuỗi mượt mà (**Fluent Chaining API**) → Khai báo giao diện thuần túy (**Declarative Interface**).
+
+```mermaid
+quadrantChart
+    title Ma Trận 2 Chiều: Cơ Chế I/O vs Phong Cách Lập Trình (DX)
+    x-axis "Blocking I/O (Thread-per-request)" --> "Non-blocking I/O (Reactive Event Loop)"
+    y-axis "Cổ điển (Overloaded Methods)" --> "Khai báo / Fluent (Declarative / Fluent)"
+    quadrant-1 "WebClient / Reactive HTTP Interface"
+    quadrant-2 "RestClient / Blocking HTTP Interface"
+    quadrant-3 "RestTemplate (Spring 3.0 Legacy)"
+    quadrant-4 "Không tồn tại (Reactive luôn dùng Fluent)"
+    "RestTemplate": [0.2, 0.2]
+    "RestClient": [0.25, 0.75]
+    "WebClient": [0.8, 0.8]
+    "HTTP Service Client (RestClientAdapter)": [0.35, 0.95]
+    "HTTP Service Client (WebClientAdapter)": [0.85, 0.95]
+```
+
+#### 📊 Bảng ma trận 2 chiều tổng kết:
+
+| Phong cách lập trình (Bề ngoài bạn code) | Cơ chế Blocking I/O (Đồng bộ - Chờ đợi) | Cơ chế Non-blocking I/O (Bất đồng bộ - Reactive) |
+| :--- | :--- | :--- |
+| **1. Cổ điển (Overloaded Methods)**<br/>Gọi các hàm nạp chồng rời rạc | **`RestTemplate`**<br/>⚠️ *Spring 3.0 (Legacy / Maintenance)*<br/>Thread bị khóa chờ mạng | *(Không có)* |
+| **2. Hiện đại (Fluent API)**<br/>Xâu chuỗi `.get().uri().retrieve()` | **`RestClient`**<br/>✅ *Spring 6.1+ / Boot 3.2+*<br/>Thread vẫn bị khóa chờ mạng, nhưng code cực kỳ thanh lịch | **`WebClient`**<br/>🚀 *Spring 5.0+ (WebFlux)*<br/>Thread không bị khóa, chạy trên Netty Event Loop + `Mono`/`Flux` |
+| **3. Khai báo (Declarative Interface)**<br/>Chỉ viết Java Interface, Spring tự sinh proxy code | **`HTTP Service Client`**<br/>*(Chạy trên nền `RestClientAdapter`)* | **`HTTP Service Client`**<br/>*(Chạy trên nền `WebClientAdapter`)* |
+
+#### 🔍 Mổ xẻ 3 câu hỏi bản chất:
+
+1. **Tại sao đã có `RestTemplate` (Blocking) lại sinh ra `RestClient` (cũng là Blocking)?**
+   * **Bên dưới (Cơ chế I/O):** Cả hai **giống hệt nhau 100%** — đều sử dụng Blocking I/O (chia sẻ chung mô hình Thread-per-request của Spring MVC, khi gửi request thì thread hiện tại phải đứng chờ cho đến khi có dữ liệu trả về).
+   * **Bên trên (Trải nghiệm code - DX):** `RestTemplate` có tới hơn 40 method nạp chồng rườm rà (`getForObject`, `getForEntity`, `exchange`...), khó đọc và khó tùy biến. Trong khi đó, `RestClient` mang toàn bộ phong cách **Fluent API** hiện đại của `WebClient` sang: xâu chuỗi method mượt mà, bắt lỗi bằng lambda `.onStatus()` cực kỳ ngắn gọn và rõ ràng.
+   * 👉 *Kết luận:* `RestClient` ra đời để **thay thế hoàn toàn `RestTemplate` về mặt cú pháp và trải nghiệm lập trình**, chứ không phải để thay đổi cơ chế I/O!
+
+2. **Tại sao lại cần `WebClient`?**
+   * **Khác biệt cốt lõi nằm ở Cơ chế I/O:** `WebClient` không khóa luồng.
+   * Khi gửi request sang một bên thứ ba (như cổng thanh toán, AI API) mất 3 giây, Thread của ứng dụng không hề bị treo vô ích mà lập tức quay lại phục vụ các HTTP request khác của người dùng. Khi nào bên thứ ba phản hồi về, Netty Event Loop mới tiếp nhận dữ liệu và thực thi callback thông qua `Mono<T>` hoặc `Flux<T>`.
+   * 👉 *Kết luận:* Dành cho hệ thống chịu tải cực cao (High Throughput - hàng chục ngàn request/giây) hoặc các dự án Reactive WebFlux toàn diện (End-to-End Non-blocking).
+
+3. **Vậy `HTTP Service Client` (Spring Boot 3.2+) thực chất là gì?**
+   * Nó **không phải là một Network Engine mới**!
+   * Nó là một **lớp vỏ trừu tượng cấp cao (High-level Declarative Abstraction)** được xây dựng trên mẫu thiết kế Dynamic Proxy.
+   * Bạn chỉ cần khai báo interface:
+     ```java
+     public interface PaymentClient {
+         @PostExchange("/api/v1/payments")
+         PaymentResponse pay(@RequestBody PaymentRequest req);
+     }
+     ```
+   * Việc bên dưới chạy Blocking hay Non-blocking hoàn toàn do bạn quyết định thông qua Adapter:
+      * Nếu gắn với `RestClientAdapter` → Nó chạy **Blocking I/O**.
+      * Nếu gắn với `WebClientAdapter` → Nó chạy **Non-blocking Reactive I/O**.
+   * 👉 *Ẩn dụ:* Giống hệt cách Spring Data JPA hoạt động: Bạn chỉ việc khai báo interface `UserRepository`, còn việc nó sinh câu lệnh SQL nào và bắn xuống database ra sao là do Spring tự lo!
+
+---
+
+### 7.4. Chuẩn Hóa Thuật Ngữ Kỹ Thuật: RestTemplate, RestClient, WebClient Là Thư Viện, Dependency Hay Công Cụ?
+
+Khi Backend cần đóng vai trò là một HTTP Client, chúng ta thường nghe nhắc tới `RestTemplate`, `RestClient`, `WebClient`, `HTTP Service Client`. Tuy nhiên, trong phỏng vấn và thảo luận kiến trúc, **nếu gọi sai bản chất thuật ngữ, bạn sẽ bị đánh giá là thiếu nền tảng cơ bản!**
+
+#### 1. Phân biệt rạch ròi 3 khái niệm nền tảng:
+
+| Khái niệm | Bản chất thực sự là gì? | Ví dụ trực quan |
+| :--- | :--- | :--- |
+| **Công cụ (Tool)** | Là một **phần mềm độc lập hoàn chỉnh** chạy ngoài mã nguồn dự án, có giao diện đồ họa (GUI) hoặc giao diện dòng lệnh (CLI). | Postman, Insomnia, cURL, Docker, Git, VS Code, IntelliJ IDEA. |
+| **Dependency (Phụ thuộc)** | Là một **đơn vị đóng gói (Artifact JAR)** được khai báo trong file cấu hình build tool (`pom.xml` của Maven hoặc `build.gradle`) để công cụ tự động tải từ kho chứa (Maven Central) về dự án. | Thẻ `<dependency>` chứa file `.jar` như `spring-boot-starter-web`, `lombok`, `mysql-connector-j`. |
+| **Thư viện (Library)** | Là một **tập hợp các package, class, method** được viết sẵn và đóng gói lại để lập trình viên chủ động `import` và gọi vào tái sử dụng trong mã nguồn. | Thư viện Jackson (chuyển đổi JSON), Apache Commons, thư viện `spring-web`. |
+
+#### 2. Vậy `RestTemplate`, `RestClient`, `WebClient` là gì?
+
+Chúng **KHÔNG PHẢI** là 3 thứ trên một cách độc lập:
+* ❌ **Không phải là Tool:** Vì bạn không thể bấm double-click chuột mở nó lên trên desktop hay gõ lệnh terminal độc lập như Postman hay cURL.
+* ❌ **Không phải là Dependency:** Bạn không thể vào `pom.xml` gõ `<artifactId>rest-client</artifactId>` vì hoàn toàn **không có gói artifact nào tên như vậy**! `RestClient` nằm sẵn bên trong dependency `spring-boot-starter-web` (cụ thể là JAR `spring-web`).
+* ❌ **Chưa đủ tầm để gọi là một Thư viện riêng lẻ:** Chúng chỉ là các Class hoặc Interface thành phần nằm bên trong thư viện mẹ `spring-web` (hoặc `spring-webflux`).
+
+#### 3. Cách gọi tên CHUẨN XÁC VÀ CHUYÊN NGHIỆP NHẤT:
+
+Khi thảo luận kiến trúc hoặc trả lời phỏng vấn Senior, bạn nên sử dụng các định danh chuẩn quốc tế sau:
+
+* ✅ **Cách gọi 1 (Chính xác & phổ biến nhất):**  
+  > *"Chúng là các **HTTP Client Components** (hoặc **Built-in HTTP Clients**) được tích hợp sẵn trong Spring Framework."*
+  * `RestTemplate`: là một **Class** cụ thể (`org.springframework.web.client.RestTemplate`).
+  * `RestClient`: là một **Interface** (`org.springframework.web.client.RestClient`).
+  * `WebClient`: là một **Interface** (`org.springframework.web.reactive.function.client.WebClient`).
+* ✅ **Cách gọi 2 (Dưới góc độ kiến trúc / giải pháp):**  
+  > *"Chúng là các **HTTP Client Abstractions / Solutions** (Cơ chế / giải pháp gọi HTTP) mà Spring cung cấp cho lập trình viên."*
+* ✅ **Riêng với HTTP Service Client:**  
+  > Gọi chuẩn là **Tính năng / Cơ chế trừu tượng khai báo (Declarative HTTP Interface Feature / Abstraction)** — bởi vì nó là một kỹ thuật kiến trúc (kết hợp Java Interface + Dynamic Proxy + Adapter) chứ không đơn thuần là một class/interface gửi HTTP request.
+
+> 💡 **Câu nói mẫu giúp bạn "ghi điểm tuyệt đối" trước hội đồng phỏng vấn:**  
+> *"Trong Spring Boot, để ứng dụng đóng vai trò là một HTTP Client gọi ra các API bên ngoài, Spring cung cấp sẵn các HTTP Client Components tùy theo kiến trúc:  
+> Ở tầng Spring MVC đồng bộ truyền thống, chúng ta có `RestTemplate` (class cũ) và `RestClient` (interface hiện đại theo phong cách Fluent API từ Spring 6.1).  
+> Ở tầng WebFlux bất đồng bộ, chúng ta có `WebClient` (interface reactive).  
+> Và ở mức độ trừu tượng cao nhất, Spring cung cấp cơ chế Declarative HTTP Service Client giúp lập trình viên chỉ cần khai báo interface, Spring sẽ tự động sinh proxy code ở runtime."*
+
+
+---
+
+## PHẦN 8: 12 CÂU HỎI PHỎNG VẤN "SÁT HẠCH KHÁI NIỆM" KINH ĐIỂN
 
 ### Câu 1: Em hãy giải thích sự khác biệt giữa HTTP và REST?
 **Đáp án chuẩn:**
@@ -330,7 +435,7 @@ graph TD
 ### Câu 4: Idempotent (Tính bất biến) là gì? Tại sao POST không idempotent mà PUT/DELETE lại idempotent?
 **Đáp án chuẩn:**
 * Một phương thức được gọi là **Idempotent** khi việc thực thi nó **một lần hay nhiều lần liên tiếp** đều để lại cùng một trạng thái duy nhất trên hệ thống.
-* **`POST` không idempotent:** Vì mỗi lần bạn gửi `POST /api/v1/orders`, hệ thống lại tạo ra một bản ghi đơn hàng mới với ID mới trong DB. Gửi 5 lần $\rightarrow$ tạo 5 đơn hàng khác nhau.
+* **`POST` không idempotent:** Vì mỗi lần bạn gửi `POST /api/v1/orders`, hệ thống lại tạo ra một bản ghi đơn hàng mới với ID mới trong DB. Gửi 5 lần $\rightarrow$\rightarrow$\rightarrow$ tạo 5 đơn hàng khác nhau.
 * **`PUT` idempotent:** Nếu bạn gửi `PUT /api/v1/users/1` với `{ "name": "Nam" }`, dù bạn gửi 1 lần hay bấm liên tục 10 lần do mạng lag, tên của user 1 trên DB vẫn là "Nam".
 * **`DELETE` idempotent:** Lần đầu gọi `DELETE /api/v1/users/1`, user bị xóa khỏi DB. Các lần gọi tiếp theo, dữ liệu đó vẫn là trạng thái đã bị xóa (hệ thống có thể trả 404 hoặc 204 nhưng database không bị thay đổi trạng thái khác đi).
 
@@ -339,8 +444,8 @@ graph TD
 ### Câu 5: Tại sao trong một hệ thống Microservices viết bằng Spring Boot, ứng dụng Backend vừa là HTTP Server vừa là HTTP Client?
 **Đáp án chuẩn:**
 * Trong kiến trúc Microservices, hệ thống được chia nhỏ thành nhiều dịch vụ độc lập:
-  * Khi nhận request từ Frontend (React/Flutter) gọi vào để tạo đơn hàng $\rightarrow$ Microservice Order đóng vai trò **HTTP Server** (xử lý endpoint và trả kết quả cho Frontend).
-  * Nhưng để hoàn tất đơn hàng, Order Service cần kiểm tra số dư ở Payment Service và kiểm tra kho ở Inventory Service $\rightarrow$ Lúc này Order Service phải chủ động gửi HTTP Request sang hai service kia, do đó nó đóng vai trò là **HTTP Client**.
+  * Khi nhận request từ Frontend (React/Flutter) gọi vào để tạo đơn hàng $\rightarrow$\rightarrow$\rightarrow$ Microservice Order đóng vai trò **HTTP Server** (xử lý endpoint và trả kết quả cho Frontend).
+  * Nhưng để hoàn tất đơn hàng, Order Service cần kiểm tra số dư ở Payment Service và kiểm tra kho ở Inventory Service $\rightarrow$\rightarrow$\rightarrow$ Lúc này Order Service phải chủ động gửi HTTP Request sang hai service kia, do đó nó đóng vai trò là **HTTP Client**.
 
 ---
 
@@ -401,6 +506,35 @@ graph TD
   }
   ```
   Nếu đơn hàng chuyển sang `PAID`, link `payment` và `cancel` sẽ tự động biến mất và thay bằng link `track_shipping`. Client không cần phải hardcode logic đường dẫn URL mà chỉ việc bấm theo các link do server chỉ dẫn.
+
+---
+
+### Câu 11: Có phải các HTTP Client của Spring (RestTemplate, RestClient, WebClient, HTTP Service Client) chỉ khác nhau ở cơ chế Non-blocking vs Blocking I/O không?
+**Đáp án chuẩn:**
+* **Khẳng định:** Không hoàn toàn! Khác biệt về cơ chế I/O (Blocking vs Non-blocking) chỉ là **một trong hai trục** phân loại. Sự tiến hóa của các HTTP Client trong Spring diễn ra trên **2 trục độc lập**:
+  1. **Trục 1 — Cơ chế I/O (Bên dưới):**
+     * *Blocking I/O:* `RestTemplate` và `RestClient`. Cả hai đều khóa cứng thread của Tomcat để chờ phản hồi từ mạng.
+     * *Non-blocking I/O:* `WebClient`. Chạy trên Netty Event Loop, giải phóng thread ngay sau khi gửi request.
+  2. **Trục 2 — Phong cách thiết kế API / DX (Bên trên):**
+     * *Overloaded Methods (Cổ điển):* `RestTemplate` với hơn 40 hàm nạp chồng cồng kềnh.
+     * *Fluent API (Hiện đại):* `RestClient` và `WebClient` với cú pháp chuỗi dot notation (`.get().uri().retrieve()`) và xử lý lỗi bằng lambda sạch sẽ.
+     * *Declarative Interface (Khai báo trừu tượng):* `HTTP Service Client` — lập trình viên chỉ viết Java Interface (`@HttpExchange`), Spring tự sinh mã proxy thực thi bên dưới (có thể cắm vào `RestClientAdapter` để chạy Blocking hoặc `WebClientAdapter` để chạy Non-blocking).
+* *Ý nghĩa:* `RestClient` ra đời không phải để đổi cơ chế I/O (vẫn là blocking), mà để mang trải nghiệm Fluent API hiện đại thay thế cho `RestTemplate` già cỗi.
+
+---
+
+### Câu 12: Khi Backend đóng vai trò là một HTTP Client, chúng ta gọi RestTemplate, RestClient, WebClient là Thư viện, Dependency hay Công cụ? Cách gọi nào chuẩn xác nhất?
+**Đáp án chuẩn:**
+* **Bản chất kỹ thuật:**
+  * Chúng **không phải là Công cụ (Tool)**: Vì Tool là phần mềm độc lập bên ngoài có GUI/CLI (như Postman, cURL, Docker).
+  * Chúng **không phải là Dependency độc lập**: Không có gói dependency nào trong Maven tên là `rest-client` hay `rest-template`. Chúng nằm sẵn bên trong file JAR `spring-web` thuộc starter `spring-boot-starter-web`.
+  * Chúng **chưa đủ lớn để gọi là một Thư viện riêng lẻ**: Thư viện là cả gói `spring-web` hoặc Jackson.
+* **Cách gọi chuẩn xác và chuyên nghiệp nhất:**
+  * Gọi là **"Các HTTP Client Components"** (hoặc **"Built-in HTTP Clients"**) tích hợp sẵn trong Spring Framework:
+    * `RestTemplate` là một **Class**.
+    * `RestClient` và `WebClient` là các **Interface**.
+  * Dưới góc độ kiến trúc, gọi là **"Các giải pháp / cơ chế trừu tượng gọi HTTP (HTTP Client Abstractions)"**.
+  * Riêng `HTTP Service Client` được định danh là **"Declarative HTTP Interface Feature"** (Tính năng / cơ chế khai báo giao diện HTTP).
 
 ---
 
