@@ -298,6 +298,9 @@ Khi sử dụng `RestClient` hoặc `RestTemplate`:
 * Khi gửi HTTP Request, thread không bị khóa mà được giải phóng ngay lập tức để phục vụ request khác.
 * Khi server bên ngoài có dữ liệu trả về, hệ điều hành thông báo qua Event Loop để kích hoạt callback tiếp tục xử lý.
 
+> [!TIP]
+> 📖 **Đọc thêm chuyên đề chuyên sâu:** Để hiểu cặn kẽ việc Tomcat có chạy thêm Netty Web Server không, luồng phối hợp 2 pha giữa Tomcat Thread Pool và Netty Client qua Servlet 3.0/3.1 `AsyncContext`, xem chi tiết tại: [bai-16-co-che-webclient-trong-spring-mvc-tomcat-vs-netty.md](file:///Users/vovantu/HTML_CSS/JAVA%20/Note/Lesson16/bai-16-co-che-webclient-trong-spring-mvc-tomcat-vs-netty.md).
+
 ```mermaid
 graph TD
     subgraph BLOCKING ["Blocking I/O - RestClient"]
