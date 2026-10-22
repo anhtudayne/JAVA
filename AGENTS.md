@@ -8,7 +8,7 @@
 - **Tiêu chuẩn chất lượng nội dung & hình thức bài giảng:**
   - **Định nghĩa chuẩn xác & Tóm tắt cốt lõi (Bắt buộc):** Mỗi bài giảng/chuyên đề phải có phần định nghĩa rõ ràng, tóm tắt bản chất của các đối tượng, khái niệm hoặc mục tiêu kỹ thuật chính ngay từ đầu để người đọc nhanh chóng nắm bắt bức tranh toàn cảnh trước khi đi sâu vào chi tiết.
   - **Văn phong & Diễn đạt khoa học:** Sử dụng cấu trúc câu mạch lạc, từ ngữ khoa học, chuẩn xác nhưng tự nhiên, dễ hiểu; tránh câu dài dòng phức tạp. Kết hợp ẩn dụ thực tế để làm sáng tỏ các khái niệm trừu tượng.
-  - **Code ví dụ ngắn gọn, trọng tâm:** Các đoạn code minh họa cần được tập trung làm nổi bật logic hoặc cú pháp cốt lõi đang giảng giải, tránh viết code dàn trải làm loãng nội dung.
+  - **Code ví dụ cần chi tiết, đầy đủ:** 
   - **Trực quan hóa đa phương tiện:** Tích cực sử dụng icon trực quan, bảng so sánh/tổng hợp (tables), sơ đồ Mermaid (luồng dữ liệu, vòng đời, kiến trúc) đảm bảo đúng cú pháp không gây lỗi render.
   - **Mở rộng chuyên sâu:** Bổ sung kiến thức Java Core, Design Pattern liên quan và Bộ câu hỏi phỏng vấn (Interview Questions) có đáp án chuẩn ở cuối bài giảng.
   - Không cần viết test vào thư mục `springboot-learning/src/test`. 

@@ -4,6 +4,14 @@
 >
 > **Tiên quyết:** Đã hoàn thành Bài 2 (IoC & Dependency Injection, hiểu rõ Bean là gì, Constructor Injection)
 
+> [!IMPORTANT]
+> **💡 TÓM TẮT BẢN CHẤT CỐT LÕI:**
+> * **Cơ chế khởi tạo & Lưu trữ:** Mặc định trong Spring, Bean có phạm vi là `Singleton`. Spring thực thi vòng đời **Bean LifeCycle** để tạo ra đúng **1 Object** `OrderService` bằng `new OrderService()`, cấu hình đầy đủ rồi cất vào một bảng băm nội bộ gọi là `DefaultSingletonBeanRegistry` (`ConcurrentHashMap`).
+> * **Cơ chế Inject:** 
+>   * Khi khởi tạo `OrderController`: Spring vào kho lấy tham chiếu của `OrderService` gắn vào.
+>   * Khi khởi tạo `PaymentController`: Spring tiếp tục lấy chính xác cái tham chiếu đó gắn vào.
+> * 👉 Cả 2 Controller (và toàn bộ ứng dụng) đều dùng chung một instance duy nhất này trong RAM, giải thích vì sao các Spring Service phải luôn là **Stateless** để an toàn đa luồng (Thread-Safety).
+
 ---
 
 ## MỤC LỤC
