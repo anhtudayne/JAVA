@@ -304,16 +304,16 @@ Khi sử dụng `RestClient` hoặc `RestTemplate`:
 ```mermaid
 graph TD
     subgraph BLOCKING ["Blocking I/O - RestClient"]
-        T1["Thread 1"] -->|Gửi request & BỊ KHÓA CHỜ 2s...| EXT1["API Ngoài"]
-        T2["Thread 2"] -->|Gửi request & BỊ KHÓA CHỜ 2s...| EXT1
+        T1["Thread 1"] -->|"Gửi request & BỊ KHÓA CHỜ 2s..."| EXT1["API Ngoài"]
+        T2["Thread 2"] -->|"Gửi request & BỊ KHÓA CHỜ 2s..."| EXT1
         POLL["Cạn kiệt Thread Pool Tomcat"]
     end
 
     subgraph NON_BLOCKING ["Non-Blocking I/O - WebClient"]
-        EL["1 Event Loop Thread Duy Nhất"] -->|Bắn Request 1| EXT2["API Ngoài"]
-        EL -->|Bắn Request 2| EXT2
-        EL -->|Làm việc khác| WORK["Xử lý nghiệp vụ khác"]
-        EXT2 -.->|Báo có data về (Callback)| EL
+        EL["1 Event Loop Thread Duy Nhất"] -->|"Bắn Request 1"| EXT2["API Ngoài"]
+        EL -->|"Bắn Request 2"| EXT2
+        EL -->|"Làm việc khác"| WORK["Xử lý nghiệp vụ khác"]
+        EXT2 -.->|"Báo có data về (Callback)"| EL
     end
 
     style POLL fill:#ffcdd2,stroke:#d32f2f
