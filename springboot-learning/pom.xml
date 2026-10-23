@@ -59,6 +59,16 @@
 			<scope>runtime</scope>
 		</dependency>
 
+		<!-- 📘 BÀI 17: AOP (Aspect-Oriented Programming) -->
+		<dependency>
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-aspects</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.aspectj</groupId>
+			<artifactId>aspectjweaver</artifactId>
+		</dependency>
+
 		<!-- 📘 BÀI 13: Database Migration với Flyway -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

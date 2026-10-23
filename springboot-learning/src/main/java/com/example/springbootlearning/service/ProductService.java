@@ -1,5 +1,7 @@
 package com.example.springbootlearning.service;
 
+import com.example.springbootlearning.annotation.Audited;
+import com.example.springbootlearning.annotation.TrackExecutionTime;
 import com.example.springbootlearning.dto.request.ProductCreateRequest;
 import com.example.springbootlearning.dto.request.ProductUpdateRequest;
 import com.example.springbootlearning.dto.response.PagedResponse;
@@ -47,6 +49,7 @@ public class ProductService {
     /**
      * Lấy tất cả sản phẩm trong database → chuyển sang List<ProductResponse>.
      */
+    @TrackExecutionTime // 📘 BÀI 17: AOP tự động đo thời gian thực thi
     @Transactional(readOnly = true)
     public List<ProductResponse> getAllProducts() {
         log.debug("Lấy danh sách tất cả products từ database");
@@ -112,6 +115,8 @@ public class ProductService {
     /**
      * Tạo sản phẩm mới trong database.
      */
+    @Audited(action = "CREATE_PRODUCT") // 📘 BÀI 17: AOP tự động ghi audit log
+    @TrackExecutionTime
     @Transactional
     public ProductResponse createProduct(ProductCreateRequest request) {
         log.info("📥 Tạo product mới: name='{}', price={}", request.getName(), request.getPrice());
@@ -145,6 +150,7 @@ public class ProductService {
     /**
      * PUT — Cập nhật TOÀN BỘ thông tin sản phẩm.
      */
+    @Audited(action = "UPDATE_PRODUCT")
     @Transactional
     public ProductResponse updateProduct(Long id, ProductUpdateRequest request) {
         log.info("📥 PUT update product id={}", id);
@@ -238,6 +244,7 @@ public class ProductService {
     /**
      * Xóa sản phẩm theo ID.
      */
+    @Audited(action = "DELETE_PRODUCT")
     @Transactional
     public void deleteProduct(Long id) {
         log.info("📥 Delete product id={}", id);
