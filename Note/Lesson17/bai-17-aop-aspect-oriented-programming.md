@@ -9,7 +9,7 @@
 | Khái niệm | Định nghĩa ngắn gọn |
 |:---|:---|
 | **AOP (Aspect-Oriented Programming)** | Lập trình hướng khía cạnh — kỹ thuật tách các **mối quan tâm xuyên suốt** (logging, security, transaction, monitoring) ra khỏi business logic chính, giúp code sạch và không lặp lại |
-| **Cross-Cutting Concern** | là những chức năng xuất hiện lặp đi lặp lại ở nhiều nơi trong ứng dụng nhưng không thuộc về nghiệp vụ cốt lõi (ví dụ: mỗi method đều cần log, đều cần kiểm tra quyền, đều cần đo thời gian) |
+| **Cross-Cutting Concern** | là những chức năng xuất hiện lặp đi lặp lại ở nhiều nơi trong ứng dụng nhưng không thuộc về nghiệp vụ cốt lõi (ví dụ: mỗi method đều cần log, đều cần kiểm tra quyền, đều cần đo thời gian). Nếu không có AOP, bạn phải chép đoạn code logging hay transaction vào từng method. Với AOP, bạn viết một lần và khai báo nó áp dụng cho những method nào.|
 | **Spring AOP** | Module AOP tích hợp trong Spring Framework, sử dụng **Runtime Proxy** (không cần compiler riêng) để "bọc" bean và chèn logic bổ sung trước/sau method gốc |
 
 > [!TIP]
