@@ -368,15 +368,15 @@ graph TD
         I1["Interface ProductService"]
         P1["Proxy implements ProductService"]
         T1["ProductServiceImpl"]
-        P1 -->|delegates| T1
-        P1 -.->|implements| I1
-        T1 -.->|implements| I1
+        P1 -->|"delegates"| T1
+        P1 -.->|"implements"| I1
+        T1 -.->|"implements"| I1
     end
 
     subgraph CGLIB["CGLIB Proxy (Spring Boot default)"]
         T2["ProductService"]
         P2["Proxy extends ProductService"]
-        P2 -->|super.method()| T2
+        P2 -->|"super.method()"| T2
     end
 ```
 
