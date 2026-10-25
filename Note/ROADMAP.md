@@ -1551,11 +1551,11 @@ Thêm API tìm kiếm nâng cao với phân trang, sắp xếp, và lọc độn
 ## 📘 Bài 12: Transaction Management
 
 ### 🎯 Mục tiêu bài học
-- [x] Hiểu ACID properties và tại sao Transaction quan trọng
-- [x] Sử dụng `@Transactional` đúng cách
-- [x] Hiểu Propagation levels và Isolation levels
-- [x] Hiểu giới hạn của `@Transactional` với hệ thống bên ngoài (distributed transaction)
-- [x] Tránh các lỗi thường gặp với `@Transactional`
+- [ ] Hiểu ACID properties và tại sao Transaction quan trọng
+- [ ] Sử dụng `@Transactional` đúng cách
+- [ ] Hiểu Propagation levels và Isolation levels
+- [ ] Hiểu giới hạn của `@Transactional` với hệ thống bên ngoài (distributed transaction)
+- [ ] Tránh các lỗi thường gặp với `@Transactional`
 
 ### 📖 Nội dung lý thuyết
 
@@ -1918,10 +1918,10 @@ Viết đầy đủ Unit Test cho UserService và UserController đã xây dựn
 ## 📘 Bài 15: Integration Test với `@SpringBootTest` & Testcontainers
 
 ### 🎯 Mục tiêu bài học
-- [ ] Viết Integration Test cho Repository layer với `@DataJpaTest`
-- [ ] Viết full Integration Test với `@SpringBootTest`
-- [ ] Sử dụng **Testcontainers** để test với database thật (PostgreSQL/MySQL container)
-- [ ] Hiểu `@ServiceConnection` (Spring Boot 3.1+) cho Testcontainers
+- [x] Viết Integration Test cho Repository layer với `@DataJpaTest`
+- [x] Viết full Integration Test với `@SpringBootTest`
+- [x] Sử dụng **Testcontainers** để test với database thật (PostgreSQL/MySQL container)
+- [x] Hiểu `@ServiceConnection` (Spring Boot 3.1+) cho Testcontainers
 
 ### 📖 Nội dung lý thuyết
 
@@ -2044,11 +2044,11 @@ graph LR
 ## 📘 Bài 16: Gọi External API — RestClient, WebClient & HTTP Service Client
 
 ### 🎯 Mục tiêu bài học
-- [ ] Phân biệt RestClient (sync), WebClient (async), và HTTP Service Client (declarative)
-- [ ] Sử dụng `RestClient` (Spring 6.1+) — thay thế `RestTemplate`
-- [ ] Sử dụng `WebClient` cho non-blocking calls
-- [ ] Hiểu HTTP Service Client (Spring Boot 3.2+) — khai báo interface, Spring tự tạo implementation
-- [ ] Xử lý error, timeout, retry khi gọi API bên ngoài
+- [x] Phân biệt RestClient (sync), WebClient (async), và HTTP Service Client (declarative)
+- [x] Sử dụng `RestClient` (Spring 6.1+) — thay thế `RestTemplate`
+- [x] Sử dụng `WebClient` cho non-blocking calls
+- [x] Hiểu HTTP Service Client (Spring Boot 3.2+) — khai báo interface, Spring tự tạo implementation
+- [x] Xử lý error, timeout, retry khi gọi API bên ngoài
 
 ### 📖 Nội dung lý thuyết
 
@@ -2404,11 +2404,11 @@ Cấu hình Spring Security cơ bản, tạo User entity với password BCrypt, 
 ## 📘 Bài 19: JWT Authentication — Tự Viết Để Hiểu Cơ Chế
 
 ### 🎯 Mục tiêu bài học
-- [ ] Hiểu JWT (JSON Web Token) là gì và cấu trúc của nó
-- [ ] Triển khai Login API trả về JWT token
-- [ ] Tạo JWT Filter để xác thực request
-- [ ] Implement Refresh Token mechanism
-- [ ] Thiết kế User-Role-Permission model (RBAC)
+- [x] Hiểu JWT (JSON Web Token) là gì và cấu trúc của nó
+- [x] Triển khai Login API trả về JWT token
+- [x] Tạo JWT Filter để xác thực request
+- [x] Implement Refresh Token mechanism
+- [x] Thiết kế User-Role-Permission model (RBAC)
 
 ### 📖 Nội dung lý thuyết
 
@@ -2498,11 +2498,11 @@ Triển khai đầy đủ: Register → Login → JWT Token → Authenticated AP
 ## 📘 Bài 20: OAuth2 Resource Server & Các Khái Niệm OAuth2/OIDC
 
 ### 🎯 Mục tiêu bài học
-- [ ] Hiểu tại sao không nên tự viết JWT filter trong mọi project production (so sánh với Bài 19)
-- [ ] Sử dụng `spring-boot-starter-oauth2-resource-server` với `JwtDecoder`
-- [ ] Hiểu các khái niệm OAuth2: Authorization Server, Resource Server, Client
-- [ ] Hiểu OpenID Connect (OIDC) và ID Token
-- [ ] Biết khi nào tự viết JWT vs khi nào dùng OAuth2 Provider (Keycloak, Auth0, Google)
+- [x] Hiểu tại sao không nên tự viết JWT filter trong mọi project production (so sánh với Bài 19)
+- [x] Sử dụng `spring-boot-starter-oauth2-resource-server` với `JwtDecoder`
+- [x] Hiểu các khái niệm OAuth2: Authorization Server, Resource Server, Client
+- [x] Hiểu OpenID Connect (OIDC) và ID Token
+- [x] Biết khi nào tự viết JWT vs khi nào dùng OAuth2 Provider (Keycloak, Auth0, Google)
 
 ### 📖 Nội dung lý thuyết
 

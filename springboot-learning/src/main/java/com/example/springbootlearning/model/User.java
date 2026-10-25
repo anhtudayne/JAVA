@@ -6,14 +6,17 @@ import jakarta.persistence.*;
 import org.hibernate.annotations.BatchSize;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
- * 📘 BÀI 10 — User Entity (JPA & Hibernate ORM)
+ * 📘 BÀI 10 & 18 — User Entity (JPA ORM & Spring Security)
  *
  * Mối quan hệ:
  *   - @OneToMany với Order (1 User có nhiều Order) -> INVERSE SIDE (mappedBy = "user").
- *   - Áp dụng CascadeType.ALL, orphanRemoval = true.
+ *   - @ManyToMany với Role (1 User có nhiều Role) -> OWNING SIDE (thông qua bảng user_roles).
+ *   - Áp dụng CascadeType.ALL, orphanRemoval = true cho orders.
  *   - @BatchSize(size = 20) giúp chống N+1 Query hiệu quả khi load lazy collection.
  */
 @Entity
@@ -30,6 +33,33 @@ public class User {
 
     @Column(name = "email", nullable = false, unique = true, length = 150)
     private String email;
+
+    /**
+     * 📘 BÀI 18: Password đã được hash một chiều bằng BCrypt.
+     * Sử dụng @JsonIgnore để không bao giờ serialize password ra JSON response.
+     */
+    @JsonIgnore
+    @Column(name = "password", nullable = false)
+    private String password;
+
+    /**
+     * Trạng thái hoạt động của tài khoản (true = hoạt động, false = bị khóa)
+     */
+    @Column(name = "active", nullable = false)
+    private boolean active = true;
+
+    /**
+     * 📘 BÀI 18: Danh sách vai trò của người dùng trong hệ thống (ROLE_USER, ROLE_ADMIN, ...)
+     */
+    @JsonIgnore
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "user_roles",
+            joinColumns = @JoinColumn(name = "user_id"),
+            inverseJoinColumns = @JoinColumn(name = "role_id")
+    )
+    @BatchSize(size = 20)
+    private Set<Role> roles = new HashSet<>();
 
     /**
      * 📖 INVERSE SIDE:
@@ -61,7 +91,23 @@ public class User {
         this.email = email;
     }
 
-    // ===== Convenience Helper Methods (Đồng bộ 2 chiều) =====
+    public User(Long id, String name, String email, String password) {
+        this.id = id;
+        this.name = name;
+        this.email = email;
+        this.password = password;
+        this.active = true;
+    }
+
+    public User(Long id, String name, String email, String password, boolean active) {
+        this.id = id;
+        this.name = name;
+        this.email = email;
+        this.password = password;
+        this.active = active;
+    }
+
+    // ===== Convenience Helper Methods =====
 
     public void addOrder(Order order) {
         this.orders.add(order);
@@ -71,6 +117,14 @@ public class User {
     public void removeOrder(Order order) {
         this.orders.remove(order);
         order.setUser(null);
+    }
+
+    public void addRole(Role role) {
+        this.roles.add(role);
+    }
+
+    public void removeRole(Role role) {
+        this.roles.remove(role);
     }
 
     // ===== Getters & Setters =====
@@ -99,6 +153,30 @@ public class User {
         this.email = email;
     }
 
+    public String getPassword() {
+        return password;
+    }
+
+    public void setPassword(String password) {
+        this.password = password;
+    }
+
+    public boolean isActive() {
+        return active;
+    }
+
+    public void setActive(boolean active) {
+        this.active = active;
+    }
+
+    public Set<Role> getRoles() {
+        return roles;
+    }
+
+    public void setRoles(Set<Role> roles) {
+        this.roles = roles;
+    }
+
     public List<Order> getOrders() {
         return orders;
     }
@@ -109,6 +187,6 @@ public class User {
 
     @Override
     public String toString() {
-        return "User{id=" + id + ", name='" + name + "', email='" + email + "'}";
+        return "User{id=" + id + ", name='" + name + "', email='" + email + "', active=" + active + "}";
     }
 }

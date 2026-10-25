@@ -142,6 +142,25 @@ public class GlobalExceptionHandler {
     }
 
     // ================================================================
+    // ⑦ Spring Security Exceptions: AccessDeniedException (403) & AuthenticationException (401)
+    // ================================================================
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<?>> handleAccessDenied(org.springframework.security.access.AccessDeniedException ex) {
+        log.warn("⛔ Truy cập bị từ chối: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN) // 403
+                .body(ApiResponse.error(HttpStatus.FORBIDDEN.value(), "Từ chối truy cập: Bạn không có quyền thực hiện thao tác này"));
+    }
+
+    @ExceptionHandler(org.springframework.security.core.AuthenticationException.class)
+    public ResponseEntity<ApiResponse<?>> handleAuthenticationException(org.springframework.security.core.AuthenticationException ex) {
+        log.warn("🔒 Lỗi xác thực: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED) // 401
+                .body(ApiResponse.error(HttpStatus.UNAUTHORIZED.value(), "Yêu cầu xác thực: Thông tin đăng nhập không hợp lệ hoặc đã hết hạn"));
+    }
+
+    // ================================================================
     //
     // Bắt MỌI exception không mong đợi: NullPointerException, lỗi Database, lỗi IO...
     //

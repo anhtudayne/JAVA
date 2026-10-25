@@ -67,4 +67,11 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
      */
     @EntityGraph(attributePaths = {"orders"})
     List<User> findByNameContainingIgnoreCase(String name);
+
+    /**
+     * 📘 BÀI 18: Tải User cùng tập Roles để phục vụ nạp quyền cho Spring Security.
+     * Tránh LazyInitializationException khi Transaction đóng.
+     */
+    @EntityGraph(attributePaths = {"roles"})
+    Optional<User> findByEmail(String email);
 }
