@@ -170,6 +170,125 @@ sequenceDiagram
 | **Khả năng mở rộng (Scalability)** | **Phức tạp.** Khi mở rộng nhiều server chạy song song (Server A, Server B sau Load Balancer), cần cấu hình Sticky Session hoặc cụm Redis lưu session tập trung. | **Dễ dàng.** Bất kỳ node server nào cũng có thể tự xác thực chữ ký của token một cách độc lập mà không cần đồng bộ bộ nhớ. |
 | **Đăng xuất (Logout) & Thu hồi quyền** | **Rất dễ.** Admin chỉ cần xóa Session trong RAM/Redis là user bị vô hiệu hóa phiên ngay lập tức. | **Phức tạp hơn.** Do token nằm ở client, cần chờ token hết hạn (`exp`) hoặc phải tự triển khai cơ chế Token Blacklist (Redis). |
 
+#### 📌 Chi tiết: Cơ Chế Server Xác Định Role Từ JWT Token
+
+Khi client gửi request đính kèm JWT, làm sao Server biết được người dùng có những quyền (Role) gì để cho phép hoặc từ chối? Quy trình diễn ra qua **2 giai đoạn** chặt chẽ:
+
+##### 1. GIAI ĐOÀN 1: Đóng gói Role vào Token (Lúc Đăng nhập - Login)
+Khi người dùng đăng nhập thành công, Server truy vấn Database thấy user có quyền `ROLE_ADMIN`. Server sẽ "nhồi" trực tiếp thông tin Role này vào phần **Payload** của JWT (dưới dạng một **Claim**):
+
+```json
+// Nội dung bên trong Payload của JWT:
+{
+  "sub": "tu@gmail.com",
+  "roles": ["ROLE_ADMIN"],      // 👈 Role được nhét sẵn vào đây!
+  "iat": 1729850000,
+  "exp": 1729853600
+}
+```
+Sau đó Server ký điện tử (**Signature**) bằng Secret Key bí mật. Nhờ chữ ký số này, người dùng hay hacker **không thể tự ý sửa `ROLE_USER` thành `ROLE_ADMIN`** (nếu cố tình sửa thì chữ ký sẽ sai lệch và bị từ chối ngay lập tức).
+
+##### 2. GIAI ĐOÀN 2: Bóc tách và Nhận diện Role (Lúc gửi Request gọi API)
+Khi client gửi request: `DELETE /api/admin/users/1` kèm Header `Authorization: Bearer <token>`, quy trình kiểm tra Role diễn ra như sau:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as 👤 Client (React/Postman)
+    participant Filter as 🛡️ JwtAuthenticationFilter
+    participant Context as 🧠 SecurityContextHolder
+    participant AuthFilter as 🚪 AuthorizationFilter (@PreAuthorize)
+    participant Controller as 🎮 AdminController
+
+    Client->>Filter: 1. Gửi DELETE /api/admin/users/1 (Kèm JWT Token)
+    Note over Filter: 2. Dùng Secret Key giải mã Token<br/>3. Đọc Claim roles -> Thấy ROLE_ADMIN<br/>4. Chuyển thành SimpleGrantedAuthority
+    
+    Filter->>Context: 5. Lưu vào SecurityContext: User: tu@gmail.com, Quyền: ROLE_ADMIN
+    
+    Filter->>AuthFilter: 6. Chuyển tiếp request
+    Note over AuthFilter: 7. Kiểm tra: Endpoint yêu cầu ROLE_ADMIN.<br/>Soi SecurityContext xem có ROLE_ADMIN không?
+    
+    alt Có ROLE_ADMIN
+        AuthFilter->>Controller: 8. ✅ Đủ quyền! Cho phép Controller thực thi xóa user
+        Controller-->>Client: Trả về HTTP 200 OK
+    else Không có ROLE_ADMIN (Chỉ có ROLE_USER)
+        AuthFilter-->>Client: ❌ 403 Forbidden (Bạn không có quyền thực hiện hành động này!)
+    end
+```
+
+##### 3. Code thực tế: Server bóc Role từ JWT trong Filter
+
+Toàn bộ việc bóc tách Role được xử lý trong `JwtAuthenticationFilter` (chạy trước khi request chạm tới Controller):
+
+```java
+@Component
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    private final JwtService jwtService;
+
+    public JwtAuthenticationFilter(JwtService jwtService) {
+        this.jwtService = jwtService;
+    }
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, 
+                                    HttpServletResponse response, 
+                                    FilterChain filterChain) throws ServletException, IOException {
+
+        // 1. Lấy chuỗi token từ Header: "Bearer eyJhbGciOi..."
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        String token = authHeader.substring(7); // Cắt bỏ tiền tố "Bearer "
+
+        // 2. Giải mã token và lấy Username + danh sách Roles từ Payload
+        String email = jwtService.extractUsername(token);
+        List<String> roles = jwtService.extractRoles(token); // -> ["ROLE_ADMIN"]
+
+        // 3. "Dịch" String Role sang chuẩn của Spring Security (GrantedAuthority)
+        List<SimpleGrantedAuthority> authorities = roles.stream()
+                .map(SimpleGrantedAuthority::new)
+                .toList();
+
+        // 4. Tạo đối tượng Authentication đã xác thực đầy đủ
+        UsernamePasswordAuthenticationToken authentication =
+                new UsernamePasswordAuthenticationToken(email, null, authorities);
+
+        // 5. 🛑 ĐẶT VÀO BỘ NHỚ REQUEST HIỆN TẠI (SecurityContext)
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+
+        // 6. Cho request đi tiếp tới Controller
+        filterChain.doFilter(request, response);
+    }
+}
+```
+
+Sau khi Filter hoàn tất, Controller kiểm tra quyền cực kỳ dễ dàng thông qua annotation:
+
+```java
+@RestController
+@RequestMapping("/api/admin")
+public class AdminController {
+
+    @DeleteMapping("/users/{id}")
+    @PreAuthorize("hasRole('ADMIN')") // 👈 Spring tự động soi trong SecurityContext
+    public ResponseEntity<String> deleteUser(@PathVariable Long id) {
+        // Chỉ ai có "ROLE_ADMIN" trong JWT mới lọt được vào đây!
+        return ResponseEntity.ok("Xóa user thành công");
+    }
+}
+```
+
+##### 💡 Câu hỏi hay: Có cần query lại Database để lấy Role không?
+Có 2 trường phái trong thực tế:
+1. **Đọc thẳng Role từ JWT (Cách tối ưu — Phổ biến nhất):**  
+   Server không cần đụng tới Database $\rightarrow$ Tốc độ kiểm tra quyền là **0 miligiây**, chịu tải cực lớn.
+2. **Lấy username từ JWT rồi query lại Database để lấy Role mới nhất:**  
+   Dùng khi hệ thống yêu cầu độ bảo mật cực cao (ví dụ: Admin vừa thu hồi quyền của nhân viên, muốn nhân viên đó mất quyền ngay lập tức mà không cần đợi JWT hết hạn).
+
 ---
 
 ## 2. Kiến Trúc Tổng Quan Spring Security
