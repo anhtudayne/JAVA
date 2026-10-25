@@ -185,28 +185,71 @@ eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbkBnbWFpbC5jb20iLCJpYXQiOjE
 |___________HEADER____________|._________________________PAYLOAD_________________________|.__________SIGNATURE___________|
 ```
 
-### 3.2. Phân tích từng phần
+### 3.2. Khái niệm & Phân tích chi tiết 3 thành phần
+
+Một chuỗi JWT chuẩn (theo RFC 7519) được cấu thành từ 3 phần tách biệt, kết nối với nhau bởi dấu chấm (`.`):
+
+$$\text{JWT} = \text{Base64Url}(\text{Header}) \;\mathbf{.}\; \text{Base64Url}(\text{Payload}) \;\mathbf{.}\; \text{Signature}$$
 
 ```mermaid
 graph TD
-    subgraph Header["🏷️ HEADER (Algorithm + Type)"]
+    subgraph Header["🏷️ 1. HEADER (Metadata kỹ thuật)"]
         H1["Base64Url Decode →"]
         H2["{<br/>  'alg': 'HS256',<br/>  'typ': 'JWT'<br/>}"]
         H1 --> H2
     end
 
-    subgraph Payload["📦 PAYLOAD (Claims = Dữ liệu)"]
+    subgraph Payload["📦 2. PAYLOAD (Dữ liệu / Claims)"]
         P1["Base64Url Decode →"]
         P2["{<br/>  'sub': 'admin@gmail.com',<br/>  'iat': 1729849600,<br/>  'exp': 1729853200,<br/>  'roles': ['ROLE_ADMIN', 'ROLE_USER'],<br/>  'userId': 4<br/>}"]
         P1 --> P2
     end
 
-    subgraph Signature["🔏 SIGNATURE (Chống giả mạo)"]
+    subgraph Signature["🔏 3. SIGNATURE (Chữ ký chống giả mạo)"]
         S1["HMAC-SHA256(<br/>  base64(header) + '.' + base64(payload),<br/>  SECRET_KEY<br/>)"]
     end
 
     Header ---|"."| Payload ---|"."| Signature
 ```
+
+#### 🏷️ 1. Header (Tiêu đề Metadata)
+* **Khái niệm:** Là phần chứa **thông tin mô tả (metadata)** về cấu trúc của chính token. Nó thông báo cho phía nhận (Server/Client) biết định dạng của token và thuật toán mật mã nào đã được sử dụng để tạo ra chữ ký.
+* **Cơ chế lưu trữ:** Là một đối tượng JSON thuần túy, sau đó được encode sang định dạng chuỗi bằng chuẩn **Base64Url** (để truyền an toàn qua URL và HTTP Header mà không bị xung đột ký tự).
+* **Các trường tiêu chuẩn cốt lõi:**
+  * `typ` *(Type)*: Loại token, giá trị tiêu chuẩn luôn là `"JWT"`.
+  * `alg` *(Algorithm)*: Thuật toán ký số/băm được áp dụng (ví dụ: thuật toán đối xứng `HS256`, `HS384`, `HS512` dùng chung một Secret Key; hoặc thuật toán bất đối xứng `RS256`, `ES256` dùng cặp Private/Public Key).
+
+---
+
+#### 📦 2. Payload (Dữ liệu / Danh sách Claims)
+* **Khái niệm:** Là **phần chứa nội dung nghiệp vụ chính** của token. Payload lưu trữ các **Claims** — tức là những thông tin khẳng định về danh tính người dùng (Subject), quyền hạn (Roles/Authorities) và các dữ liệu phụ trợ liên quan.
+* **Cơ chế lưu trữ:** Là một đối tượng JSON gồm các cặp key-value, được encode sang chuỗi bằng **Base64Url**.
+* **Đặc tính kỹ thuật then chốt:**
+  * **Chỉ encode Base64Url chứ KHÔNG mã hóa bí mật (Not Encrypted):** Bất kỳ ai có được chuỗi JWT đều có thể giải mã (decode) Base64Url để đọc rõ toàn bộ nội dung JSON bên trong Payload trong vòng 0 giây (ví dụ qua trang `jwt.io`).
+  * **Tự chứa thông tin (Self-contained):** Nhờ việc gói sẵn thông tin người dùng và quyền hạn bên trong Payload, Server khi nhận request chỉ cần đọc Payload là có thể phân quyền ngay lập tức mà không cần tốn thời gian truy vấn vào Database.
+  * ⚠️ **Nguyên tắc an toàn tối thượng:** Tuyệt đối **không** lưu trữ mật khẩu, mã PIN, số thẻ tín dụng hoặc các dữ liệu cá nhân nhạy cảm trong Payload.
+
+---
+
+#### 🔏 3. Signature (Chữ ký số bảo đảm toàn vẹn)
+* **Khái niệm:** Là chuỗi mã băm mật mã dùng để **xác thực nguồn gốc** và **bảo vệ tính toàn vẹn (Integrity)** tuyệt đối của token, bảo đảm rằng nội dung ở phần Header và Payload chưa từng bị bất kỳ ai chỉnh sửa hay giả mạo trên đường truyền.
+* **Cơ chế tính toán:** Được sinh ra bằng cách ghép chuỗi `Base64Url(Header)` và `Base64Url(Payload)` lại với nhau (ngăn cách bằng dấu `.`), sau đó kết hợp với một khóa bí mật (**Secret Key**) chỉ duy nhất Server biết, rồi đưa qua thuật toán băm đã chỉ định ở Header:
+  $$\text{Signature} = \text{HMACSHA256}\Big(\text{Base64Url(Header)} + \text{"."} + \text{Base64Url(Payload)},\; \text{SECRET\_KEY}\Big)$$
+* **Nguyên lý chống giả mạo:**
+  * Chỉ Server sở hữu `SECRET_KEY` mới có khả năng tạo ra một `Signature` hợp lệ.
+  * Nếu Client hoặc Hacker can thiệp sửa đổi bất kỳ byte nào trong Payload (ví dụ: tự ý đổi `"roles": ["ROLE_USER"]` thành `["ROLE_ADMIN"]`), thì khi request gửi tới Server, Server dùng `SECRET_KEY` tính lại Signature sẽ ra một kết quả hoàn toàn khác với chữ ký đính kèm. Ngay lập tức Token bị coi là bất hợp pháp và request bị từ chối (HTTP 401 Unauthorized).
+
+---
+
+#### 📋 Bảng tổng hợp bản chất 3 thành phần
+
+| Thành phần | Định dạng gốc | Cách biểu diễn trong JWT | Có bị lộ nội dung không? | Ai có thể tạo / chỉnh sửa? |
+| :--- | :--- | :--- | :--- | :--- |
+| **Header** | JSON Metadata | Chuỗi mã hóa Base64Url | **CÓ** (Ai cũng decode đọc được) | Server tạo lúc đăng nhập |
+| **Payload** | JSON Claims | Chuỗi mã hóa Base64Url | **CÓ** (Ai cũng decode đọc được) | Server tạo lúc đăng nhập |
+| **Signature** | Chuỗi băm mật mã | Chuỗi Base64Url nhị phân | **KHÔNG** (Không thể dịch ngược ra Secret Key) | **Chỉ Server** (vì chỉ Server giữ Secret Key) |
+
+---
 
 ### 3.3. Các loại Claims trong Payload
 
