@@ -14,7 +14,39 @@
 | **Security Filter Chain** | Chuỗi các bộ lọc (filter) xếp theo thứ tự cố định, mỗi filter đảm nhiệm một nhiệm vụ bảo mật. Mọi HTTP request đều phải "đi qua chuỗi lọc" này trước khi chạm tới Controller. |
 | **Authentication** | Quá trình xác minh danh tính: "Bạn tự xưng là `admin@gmail.com` — hãy chứng minh!". Kết quả là một đối tượng `Authentication` chứa thông tin đã được xác thực. |
 | **Authorization** | Quá trình kiểm tra quyền: "Bạn đã chứng minh là admin — nhưng bạn có quyền xóa dữ liệu không?". Dựa trên Role/Permission. |
-| **UserDetailsService** | Interface mà bạn phải implement để Spring Security biết cách tải thông tin user từ database. |
+| **UserDetailsService** | Interface mà bạn phải implement để Spring Security biết cách tải thông tin user từ database. 
+Giải thích : Spring Security không thể biết trước Database của bạn là MySQL hay PostreSQL. Nên Spring Security đặt ra 1 hợp đồng (interface). 
+🗣️ Spring Security sẽ lo hết việc phức tạp: mã hóa mật khẩu, kiểm tra đúng/sai, cấp quyền, chặn cửa. Nhưng tôi không biết DB của bạn ở đâu.
+Tôi đưa cho bạn cái interface UserDetailsService. Việc của bạn là viết code tìm user trong DB của bạn lên, rồi 'dịch' dữ liệu đó sang chuẩn của tôi (chuẩn UserDetails)."
+```mermaid
+    autonumber
+    actor User as 👤 Người dùng
+    participant Sec as 🛡️ Spring Security<br/>(AuthenticationProvider)
+    participant UDS as ⚙️ CustomUserDetailsService<br/>(Class do BẠN viết)
+    participant DB as 🗄️ Database của bạn
+    participant Enc as 🔑 PasswordEncoder (BCrypt)
+
+    User->>Sec: 1. Gửi form Login (email: "tu@gmail.com", pass: "123456")
+    
+    Note over Sec,UDS: Spring Security KHÔNG tự query DB mà gọi hàm của BẠN:
+    Sec->>UDS: 2. Gọi loadUserByUsername("tu@gmail.com")
+    
+    UDS->>DB: 3. Chạy câu lệnh: userRepository.findByEmail("tu@gmail.com")
+    DB-->>UDS: Trả về Entity User (chứa pass hash: $2a$10$xyz...)
+    
+    Note over UDS: 4. Bạn gói Entity thành đối tượng chuẩn UserDetails
+    UDS-->>Sec: Trả về đối tượng UserDetails cho Spring Security
+
+    Note over Sec,Enc: 5. Đến đây Spring Security tự làm nốt phần còn lại:
+    Sec->>Enc: So sánh "123456" với pass hash "$2a$10$xyz..."
+    
+    alt Mật khẩu đúng
+        Sec-->>User: ✅ Đăng nhập thành công! (Cấp Token / Session)
+    else Mật khẩu sai
+        Sec-->>User: ❌ 401 Unauthorized (Sai email hoặc mật khẩu)
+    end
+```
+|
 | **PasswordEncoder** | Component mã hóa mật khẩu một chiều (one-way hash). BCrypt là chuẩn công nghiệp hiện tại. |
 | **SecurityContext** | Kho lưu trữ thông tin xác thực của request hiện tại (thread-local). Sau khi xác thực thành công, `Authentication` object được đặt vào đây. |
 
