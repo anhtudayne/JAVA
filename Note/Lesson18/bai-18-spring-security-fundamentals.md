@@ -96,7 +96,7 @@ Người lạ → POST /api/auth/login → ✅ Trả về JWT Token
 |:---|:---|
 | 🔐 **Authentication** | Xác thực người dùng (username/password, JWT, OAuth2, LDAP) |
 | 🛡️ **Authorization** | Phân quyền truy cập theo Role/Permission |
-| 🌐 **CORS** | Cross-Origin Resource Sharing — cho phép frontend khác domain gọi API |
+| 🌐 **CORS** | Cross-Origin Resource Sharing — cho phép frontend khác domain gọi API. Giải thích : Khác 1 trong 3 thứ sau : protocal, domain, port thì gọi là khác domain. Ví dụ frontend : http://localhost:3000 thì khác với http://localhost:8080 gọi là khác domain vì khác port|
 | 🛑 **CSRF Protection** | Chống tấn công Cross-Site Request Forgery |
 | 🔒 **Session Management** | Quản lý phiên đăng nhập (stateful/stateless) |
 | 🗝️ **Password Encoding** | Mã hóa mật khẩu an toàn (BCrypt, Argon2) |
