@@ -354,9 +354,34 @@ graph TD
 
 ---
 
-#### ⚖️ Sự khác biệt cốt tử trong cách vận hành 3 lớp giữa 2 mô hình
+#### 💡 2 Sự Thật Cốt Lõi Để Không Bị Nhầm Lẫn Về 3 Lớp Kiến Trúc
 
-Nhiều người học thường bị nhầm lẫn vì **sơ đồ kinh điển của Spring Security được thiết kế cho mô hình Web truyền thống**. Trên thực tế, 2 mô hình vận hành 3 lớp này hoàn toàn khác nhau:
+Rất nhiều người học bị bối rối vì nghĩ rằng: *"Request đăng nhập sẽ chạy qua Lớp 1 và Lớp 3, còn request gọi API sẽ chạy qua Lớp 1 và Lớp 2"*. Đây là hiểu lầm rất phổ biến! Để nắm vững bản chất, hãy ghi nhớ 2 sự thật sau:
+
+##### 📌 Sự thật 1: MỌI REQUEST ĐỀU BẮT BUỘC PHẢI ĐI QUA LỚP 1 VÀ LỚP 2!
+* **Lớp 1 và Lớp 2 là CỔNG KIỂM SOÁT (Filter Chain)** án ngữ trước toàn bộ ứng dụng Spring Boot.
+* Bất kể là request Đăng nhập (`POST /api/auth/login`) hay request Xem đơn hàng (`GET /api/orders`), hễ gửi từ Internet vào thì **100% đều phải đi qua Lớp 1 rồi qua Lớp 2**. Không có request nào được "bay thẳng" vào Lớp 3 cả!
+
+```
+[Client từ Internet]
+       ↓
+[Lớp 1: Cổng Tomcat chuyển tiếp (DelegatingFilterProxy)]
+       ↓
+[Lớp 2: Hàng rào Filter kiểm tra (SecurityFilterChain)]
+       ↓
+[DispatcherServlet (Spring MVC)]
+       ↓
+[Controller của bạn]
+```
+
+##### 📌 Sự thật 2: LỚP 3 KHÔNG PHẢI LÀ FILTER! Nó là "Bộ công cụ" nằm trong nhà
+* Lớp 3 (`AuthenticationManager`, `UserDetailsService`, `PasswordEncoder`) **không nằm trên đường đi của HTTP request**.
+* Lớp 3 thực chất là một **bộ công cụ chuyên dùng để kiểm tra mật khẩu trong Database** (xem password gửi lên có khớp với password đã mã hóa trong DB hay không).
+* **Ai cần kiểm tra mật khẩu thì người đó chủ động gọi Lớp 3 ra dùng!**
+
+---
+
+#### ⚖️ Sơ đồ Đối Chiếu Tổng Quan 2 Mô Hình Kiến Trúc
 
 ```mermaid
 graph TD
@@ -386,6 +411,46 @@ graph TD
         end
     end
 ```
+
+---
+
+#### 🔄 Phân tích đường đi của 2 Luồng Request Thực Tế
+
+##### 🟢 Luồng 1: Khi bạn ĐĂNG NHẬP (`POST /api/auth/login`)
+*(Client gửi email + password lên để xin cấp JWT Token)*
+
+1. Request đi qua **Lớp 1** $\rightarrow$ Đi vào **Lớp 2** (Filter Chain).
+2. Tại **Lớp 2**: Vì đường dẫn `/api/auth/login` được bạn cấu hình là `.permitAll()` (cho phép tự do) $\rightarrow$ Các filter ở Lớp 2 **cho qua luôn, không chặn, không kiểm tra token**!
+3. Request đi tiếp vào **`AuthController`** (Spring MVC RestController do bạn viết).
+4. Tại `AuthController`: Bạn muốn kiểm tra xem email/password user gửi lên có đúng không $\rightarrow$ **Chính `AuthController` chủ động gọi Lớp 3 ra để kiểm tra!**
+   * Lớp 3 (`AuthenticationManager`) vào DB lấy user lên, dùng `PasswordEncoder` so khớp mật khẩu.
+   * Nếu đúng mật khẩu $\rightarrow$ `AuthController` tạo ra chuỗi **JWT Token** và trả về cho Client.
+5. 👉 **Tóm lại Luồng 1:** Request đi qua **Lớp 1 $\rightarrow$ Lớp 2 $\rightarrow$ vào tới Controller $\rightarrow$ Controller mới mượn Lớp 3 để check password $\rightarrow$ Sinh Token trả về**.
+
+##### 🔵 Luồng 2: Khi bạn GỌI API BÌNH THƯỜNG (`GET /api/orders`)
+*(Client đã có Token từ Luồng 1, giờ kẹp Header `Authorization: Bearer <token>` để lấy dữ liệu)*
+
+1. Request đi qua **Lớp 1** $\rightarrow$ Đi vào **Lớp 2** (Filter Chain).
+2. Tại **Lớp 2**:
+   * Gặp filter **`JwtAuthenticationFilter`**: Filter này bóc Token ra, soi chữ ký xem có đúng không, lấy ra email và role (`ROLE_USER`), rồi nạp vào `SecurityContextHolder`.
+   * Gặp filter **`AuthorizationFilter`**: Soi xem user này có quyền xem `/api/orders` không $\rightarrow$ Có quyền!
+3. Request đi tiếp vào **`OrderController`** để lấy danh sách đơn hàng trả về cho Client.
+4. 👉 **Trong suốt Luồng 2 này, Lớp 3 HOÀN TOÀN KHÔNG ĐƯỢC DÙNG ĐẾN!** (Vì người dùng gửi Token chứ không gửi mật khẩu, không có mật khẩu nào cần Lớp 3 phải so khớp cả).
+
+---
+
+#### 📊 Bảng tổng kết đối chiếu 2 luồng trong REST API + JWT
+
+| Câu hỏi phân định | Luồng 1: Đăng nhập (`POST /api/auth/login`) | Luồng 2: Gọi API (`GET /api/orders`) |
+| :--- | :--- | :--- |
+| **Có đi qua Lớp 1 không?** | **CÓ** (Bắt buộc cho mọi request) | **CÓ** (Bắt buộc cho mọi request) |
+| **Có đi qua Lớp 2 không?** | **CÓ** (Nhưng được Lớp 2 cho qua luôn vì cấu hình `.permitAll()`). | **CÓ** (Bị `JwtAuthenticationFilter` ở Lớp 2 giữ lại để soi Token). |
+| **Lớp 3 được dùng ở đâu?** | Được gọi **bên trong `AuthController`** để kiểm tra mật khẩu lúc đăng nhập. | ❌ **Hoàn toàn không dùng tới Lớp 3.** |
+| **Kết quả trả về cho Client** | Chuỗi **JWT Token** dạng JSON. | **Dữ liệu nghiệp vụ** (danh sách đơn hàng, sản phẩm...). |
+
+---
+
+#### 🏛️ vs 🚀 Bảng So Sánh Toàn Diện: Mô hình Truyền Thống vs Mô hình Hiện Đại
 
 | Tiêu chí phân biệt | Mô hình Truyền thống (Form-Login / Session) | Mô hình Hiện đại (REST API + JWT) |
 | :--- | :--- | :--- |
@@ -655,69 +720,153 @@ graph TD
 
 ## 6. Cấu Hình SecurityFilterChain
 
-### 6.1. Cấu hình cơ bản cho REST API (Stateless)
+### 6.1. Bản chất: Có phải chỉ cần thêm mỗi JwtAuthenticationFilter là xong?
+
+> ❓ **Câu hỏi cốt lõi:** *"Có phải điểm khác biệt duy nhất khi chuyển sang RESTful API + JWT trong Spring Security chỉ là chèn thêm `JwtAuthenticationFilter` vào trước chuỗi filter truyền thống?"*
+
+👉 **Về mặt bóc tách Token:** **ĐÚNG.** Việc thêm `JwtAuthenticationFilter` vào trước `UsernamePasswordAuthenticationFilter` chính là trái tim của việc xác thực JWT trên từng request:
+```java
+.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
+```
+
+⚠️ **NHƯNG CHỈ THÊM MỖI FILTER ĐÓ THÌ CHƯA ĐỦ!**  
+Nếu bạn chỉ chèn `JwtAuthenticationFilter` mà không thay đổi các cấu hình khác, ứng dụng của bạn vẫn chạy theo kiểu truyền thống: vẫn bị lỗi 403 Forbidden do CSRF, vẫn âm thầm tạo `HttpSession` tốn RAM trong Tomcat, và khi chưa đăng nhập vẫn tự động chuyển hướng (Redirect 302) sang trang web HTML `/login` thay vì trả mã JSON!
+
+Để biến Spring Security thành một hệ thống **RESTful API + JWT hoàn chỉnh**, bạn cần thực hiện **5 THAY ĐỔI ĐỒNG BỘ** sau:
+
+```mermaid
+graph TD
+    Root["⚙️ 5 THAY ĐỔI CỐT TỬ KHI DÙNG REST API + JWT"]
+    
+    Root --> C1["1. Thêm JwtAuthenticationFilter<br/>(Bóc token & nạp SecurityContext)"]
+    Root --> C2["2. Tắt CSRF: csrf.disable()<br/>(Vì JWT không dùng Cookie nên miễn nhiễm CSRF)"]
+    Root --> C3["3. Đổi Session sang STATELESS<br/>(Cấm server tạo HttpSession trong RAM)"]
+    Root --> C4["4. Bật & Cấu hình CORS<br/>(Cho phép React/Vue port 3000 gọi vào 8080)"]
+    Root --> C5["5. Tắt Form-Login & Trả lỗi JSON 401/403<br/>(Không redirect về trang web /login mặc định)"]
+
+    style C1 fill:#c8e6c9,stroke:#388e3c,stroke-width:2px
+    style C2 fill:#ffebee,stroke:#e53935
+    style C3 fill:#fff9c4,stroke:#fbc02d
+    style C4 fill:#bbdefb,stroke:#1976d2
+    style C5 fill:#e1bee7,stroke:#8e24aa
+```
+
+---
+
+### 6.2. Bảng đối chiếu cấu hình: Web Truyền Thống vs RESTful API + JWT
+
+| Thành phần cấu hình | Web Truyền thống (Form-Login / Session) | RESTful API + JWT Hiện đại | Tại sao phải thay đổi? |
+| :--- | :--- | :--- | :--- |
+| **1. Custom Filter** | Không có (Dùng các filter mặc định). |  **Thêm `JwtAuthenticationFilter`** trước `UsernamePassword...`. | Để bắt Header `Authorization: Bearer <token>` trên mỗi request nghiệp vụ. |
+| **2. Session Management** | `IF_REQUIRED` (Mặc định). | 🛑 **`SessionCreationPolicy.STATELESS`** | Bắt buộc cấm Server tạo `HttpSession` trong RAM, giải phóng hoàn toàn bộ nhớ. |
+| **3. CSRF Protection** |  **Bật (Enabled)**. | 🛑 **Tắt (`csrf.disable()`)** | JWT được lưu ở Header chứ không dùng Cookie, trình duyệt không tự gửi nên **miễn nhiễm với tấn công CSRF**. Nếu không tắt, mọi request `POST`, `PUT`, `DELETE` từ Postman/React đều bị lỗi 403 Forbidden! |
+| **4. CORS Configuration** | Không cần (vì frontend và backend chung 1 domain). |  **Bắt buộc cấu hình CORS** | Frontend (port 3000) gọi Backend (port 8080) là khác Origin $\rightarrow$ Không bật CORS là bị trình duyệt chặn ngay lập tức. |
+| **5. Cơ chế trả lỗi (Error Handling)** | Chuyển hướng (Redirect 302) về trang HTML `/login`. |  **Trả mã HTTP 401 / 403 dạng JSON** | REST API phục vụ cho Mobile/Frontend, không có giao diện HTML để hiển thị, phải trả về JSON để Frontend tự điều hướng. |
+| **6. Form Login & HTTP Basic** | `http.formLogin(...)` bật lên. | 🛑 **Bỏ hoàn toàn `formLogin()`** | Đăng nhập bây giờ là một endpoint API bình thường (`POST /api/auth/login`) do Controller tự xử lý. |
+
+---
+
+### 6.3. File cấu hình `SecurityConfig` mẫu hoàn chỉnh (REST API + JWT)
+
+Dưới đây là file cấu hình chuẩn mực của một dự án Spring Boot 3.x sử dụng **Spring Security 6.x + JWT**:
 
 ```java
+package com.example.springbootlearning.config;
+
+import com.example.springbootlearning.security.JwtAuthenticationFilter;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.List;
 
 @Configuration
-@EnableWebSecurity       // Kích hoạt Spring Security cho web
-@EnableMethodSecurity    // Kích hoạt @PreAuthorize, @Secured, @RolesAllowed
+@EnableWebSecurity       // Kích hoạt Spring Security
+@EnableMethodSecurity    // Kích hoạt phân quyền bằng annotation @PreAuthorize
 public class SecurityConfig {
+
+    private final JwtAuthenticationFilter jwtAuthFilter; // 👈 1. Custom Filter bóc tách Token
+    private final AuthenticationProvider authenticationProvider;
+
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthFilter, 
+                          AuthenticationProvider authenticationProvider) {
+        this.jwtAuthFilter = jwtAuthFilter;
+        this.authenticationProvider = authenticationProvider;
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
-            // 1. Tắt CSRF — REST API stateless không cần CSRF protection
-            .csrf(csrf -> csrf.disable())
+            // 👈 2. BẬT CORS (cho phép frontend khác domain gọi vào)
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
-            // 2. Cấu hình phân quyền theo URL
+            // 👈 3. TẮT CSRF (vì REST API + JWT không dùng cookie session)
+            .csrf(AbstractHttpConfigurer::disable)
+
+            // 👈 4. CẤU HÌNH PHÂN QUYỀN URL
             .authorizeHttpRequests(auth -> auth
                 // Public endpoints — không cần đăng nhập
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
-                .requestMatchers("/h2-console/**").permitAll()
-
-                // Chỉ cho phép đọc (GET) với USER hoặc ADMIN
                 .requestMatchers(HttpMethod.GET, "/api/products/**").permitAll()
 
-                // Admin-only endpoints
+                // Admin endpoints
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
-                // Tất cả request còn lại phải được xác thực
+                // Tất cả các request còn lại phải có token hợp lệ
                 .anyRequest().authenticated()
             )
 
-            // 3. Stateless session — không tạo HTTP session
-            .sessionManagement(session ->
+            // 👈 5. ĐẶT CHẾ ĐỘ STATELESS (Cấm server tạo Session trong RAM)
+            .sessionManagement(session -> 
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
 
-            // 4. Cho phép H2 Console hoạt động (dev only)
-            .headers(headers ->
-                headers.frameOptions(frame -> frame.sameOrigin())
+            // 👈 6. XỬ LÝ LỖI TRẢ VỀ JSON 401 CHỨ KHÔNG REDIRECT VỀ TRANG WEB HTML
+            .exceptionHandling(ex -> ex
+                .authenticationEntryPoint((request, response, authException) -> {
+                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                    response.setContentType("application/json;charset=UTF-8");
+                    response.getWriter().write("{\"error\": \"Unauthorized\", \"message\": \"Token khong hop le hoac da het han\"}");
+                })
             )
+
+            .authenticationProvider(authenticationProvider)
+
+            // 👈 7. CHÈN JWT FILTER CỦA BẠN VÀO TRƯỚC BỘ LỌC FORM TRUYỀN THỐNG
+            .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class)
 
             .build();
     }
 
     @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOrigins(List.of("http://localhost:3000")); // Domain Frontend React/Vue
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("*"));
+        config.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
     }
 }
 ```
 
-### 6.2. Giải thích từng phần cấu hình
+### 6.4. Giải thích từng phần cấu hình
 
 | Phần | Giải thích |
 |:---|:---|
@@ -728,7 +877,7 @@ public class SecurityConfig {
 | `.authenticated()` | Yêu cầu user đã xác thực (bất kỳ role nào) |
 | `SessionCreationPolicy.STATELESS` | Không tạo/dùng HTTP Session — mỗi request tự chứng minh (JWT) |
 
-### 6.3. Thứ tự quy tắc Matcher — Cực kỳ quan trọng!
+### 6.5. Thứ tự quy tắc Matcher — Cực kỳ quan trọng!
 
 ```java
 // ❌ SAI — .anyRequest().authenticated() ĐẶT TRƯỚC sẽ nuốt hết các rule phía sau
