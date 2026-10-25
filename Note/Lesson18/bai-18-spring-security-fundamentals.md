@@ -14,10 +14,7 @@
 | **Security Filter Chain** | Chuỗi các bộ lọc (filter) xếp theo thứ tự cố định, mỗi filter đảm nhiệm một nhiệm vụ bảo mật. Mọi HTTP request đều phải "đi qua chuỗi lọc" này trước khi chạm tới Controller. |
 | **Authentication** | Quá trình xác minh danh tính: "Bạn tự xưng là `admin@gmail.com` — hãy chứng minh!". Kết quả là một đối tượng `Authentication` chứa thông tin đã được xác thực. |
 | **Authorization** | Quá trình kiểm tra quyền: "Bạn đã chứng minh là admin — nhưng bạn có quyền xóa dữ liệu không?". Dựa trên Role/Permission. |
-| **UserDetailsService** | Interface mà bạn phải implement để Spring Security biết cách tải thông tin user từ database. 
-Giải thích : Spring Security không thể biết trước Database của bạn là MySQL hay PostreSQL. Nên Spring Security đặt ra 1 hợp đồng (interface). 
-🗣️ Spring Security sẽ lo hết việc phức tạp: mã hóa mật khẩu, kiểm tra đúng/sai, cấp quyền, chặn cửa. Nhưng tôi không biết DB của bạn ở đâu.
-Tôi đưa cho bạn cái interface UserDetailsService. Việc của bạn là viết code tìm user trong DB của bạn lên, rồi 'dịch' dữ liệu đó sang chuẩn của tôi (chuẩn UserDetails)."
+| **UserDetailsService** | Interface mà bạn phải implement để Spring Security biết cách tải thông tin user từ database. Giải thích : Spring Security không thể biết trước Database của bạn là MySQL hay PostreSQL. Nên Spring Security đặt ra 1 hợp đồng (interface). 🗣️ Spring Security sẽ lo hết việc phức tạp: mã hóa mật khẩu, kiểm tra đúng/sai, cấp quyền, chặn cửa. Nhưng tôi không biết DB của bạn ở đâu.Tôi đưa cho bạn cái interface UserDetailsService. Việc của bạn là viết code tìm user trong DB của bạn lên, rồi 'dịch' dữ liệu đó sang chuẩn của tôi (chuẩn UserDetails)."
 ```mermaid
     autonumber
     actor User as 👤 Người dùng
