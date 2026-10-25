@@ -98,10 +98,77 @@ Người lạ → POST /api/auth/login → ✅ Trả về JWT Token
 | 🛡️ **Authorization** | Phân quyền truy cập theo Role/Permission |
 | 🌐 **CORS** | Cross-Origin Resource Sharing — cho phép frontend khác domain gọi API. Giải thích : Khác 1 trong 3 thứ sau : protocal, domain, port thì gọi là khác domain. Ví dụ frontend : http://localhost:3000 thì khác với http://localhost:8080 gọi là khác domain vì khác port|
 | 🛑 **CSRF Protection** | Chống tấn công Cross-Site Request Forgery |
-| 🔒 **Session Management** | Quản lý phiên đăng nhập (stateful/stateless) |
+| 🔒 **Session Management** | Quản lý phiên đăng nhập:<br/>• **Stateful:** Server lưu thông tin đăng nhập trong RAM/bộ nhớ (`HttpSession`) và nhận diện client qua Cookie `JSESSIONID`.<br/>• **Stateless:** Server không lưu bất kỳ trạng thái nào trong bộ nhớ, mỗi request client phải tự đính kèm bằng chứng xác thực (như JWT Token). |
 | 🗝️ **Password Encoding** | Mã hóa mật khẩu an toàn (BCrypt, Argon2) |
 | 📋 **Security Headers** | Tự động thêm header bảo mật (X-Frame-Options, X-XSS-Protection...) |
 | 🔍 **Audit & Logging** | Ghi log các sự kiện bảo mật |
+
+#### 📌 Chi tiết: Session Management — Stateful vs Stateless
+
+Giao thức HTTP vốn dĩ là **Stateless (vô trạng thái)** — mỗi request độc lập và server không tự ghi nhớ client. Để duy trì trạng thái đăng nhập giữa các request, Spring Security hỗ trợ 2 mô hình chính:
+
+##### 1. Mô hình STATEFUL (Có trạng thái — Server "ghi nhớ" qua Session & Cookie)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Người dùng (Browser)
+    participant Server as Server (Tomcat)
+    participant RAM as RAM Server (Session Store)
+
+    User->>Server: 1. Đăng nhập: username="tu", pass="123"
+    Note over Server: Mật khẩu đúng! Tạo 1 ô nhớ trong RAM:
+    Server->>RAM: Lưu: SessionID = "ABC-123" (User: Tu, Role: ADMIN)
+    Server-->>User: 2. Trả về Cookie: Set-Cookie: JSESSIONID=ABC-123
+
+    Note over User,Server: Những lần gọi tiếp theo (Trình duyệt tự kẹp Cookie):
+    User->>Server: 3. GET /api/orders (Kèm Cookie: JSESSIONID=ABC-123)
+    Server->>RAM: Tra cứu: "Ai đang giữ mã ABC-123?" -> Tìm thấy: Anh Tú (ADMIN)
+    Server-->>User: 4. Trả về danh sách đơn hàng
+```
+
+* **Cách hoạt động:**
+  * Khi login thành công, Server tạo ra một vùng nhớ trong RAM gọi là `HttpSession` và cấp cho client một mã định danh ngẫu nhiên gọi là `JSESSIONID` (lưu tại Cookie của trình duyệt).
+  * Mọi request tiếp theo, trình duyệt tự động gửi kèm cookie `JSESSIONID`. Server đối chiếu ID này trong RAM để xác định danh tính và quyền hạn của người dùng.
+* **Đặc điểm & Ứng dụng:**
+  * Server chịu trách nhiệm lưu trữ và duy trì trạng thái phiên.
+  * Phù hợp với: Ứng dụng web truyền thống dạng Monolith (Spring MVC kết hợp Thymeleaf, JSP rendered từ server).
+
+##### 2. Mô hình STATELESS (Vô trạng thái — Server không lưu bộ nhớ, Client tự mang Token)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Người dùng (React / Mobile App)
+    participant Server as Server (Spring Boot REST API)
+
+    User->>Server: 1. Đăng nhập: username="tu", pass="123"
+    Note over Server: Mật khẩu đúng! Không lưu gì vào RAM.<br/>Tạo chuỗi JWT Token có chữ ký bảo mật:
+    Server-->>User: 2. Trả về JWT Token: "eyJhbGciOi..."
+    Note over User: Frontend tự lưu Token vào LocalStorage / Memory
+
+    Note over User,Server: Những lần gọi tiếp theo:
+    User->>Server: 3. GET /api/orders (Header: Authorization: Bearer eyJhbGciOi...)
+    Note over Server: Server giải mã Token, kiểm tra chữ ký số -> Hợp lệ thì cho qua!<br/>Xử lý xong là giải phóng, không lưu vết.
+    Server-->>User: 4. Trả về danh sách đơn hàng
+```
+
+* **Cách hoạt động:**
+  * Khi login thành công, Server kiểm tra thông tin hợp lệ sẽ tạo một chuỗi mã hóa **JWT (JSON Web Token)** chứa thông tin user và chữ ký số bí mật (Digital Signature) rồi trả về cho client.
+  * Server **hoàn toàn không lưu thông tin phiên trong RAM**.
+  * Ở các request tiếp theo, client phải chủ động gắn token này vào HTTP Header: `Authorization: Bearer <token>`. Server chỉ giải mã và xác thực tính hợp lệ của chữ ký; xử lý xong request là kết thúc, không lưu lại trạng thái.
+* **Đặc điểm & Ứng dụng:**
+  * Server hoàn toàn "Stateless", không tốn tài nguyên bộ nhớ để theo dõi phiên người dùng.
+  * Phù hợp với: **Hệ thống REST API hiện đại**, ứng dụng Mobile, kiến trúc Microservices và ứng dụng Single Page App (React, Vue, Angular).
+
+##### 3. Bảng so sánh Stateful vs Stateless
+
+| Tiêu chí | **STATEFUL (Session / Cookie)** | **STATELESS (JWT Token)** |
+| :--- | :--- | :--- |
+| **Nơi lưu thông tin đăng nhập** | **Trong RAM của Server** (`HttpSession`). | **Phía Client** (Trình duyệt, điện thoại tự giữ Token). |
+| **Tài nguyên bộ nhớ Server** | Tốn RAM. Càng nhiều triệu user online đồng thời thì server càng tốn bộ nhớ. | Cực nhẹ RAM. 1 triệu user online đồng thời cũng không làm tăng bộ nhớ session trên server. |
+| **Khả năng mở rộng (Scalability)** | **Phức tạp.** Khi mở rộng nhiều server chạy song song (Server A, Server B sau Load Balancer), cần cấu hình Sticky Session hoặc cụm Redis lưu session tập trung. | **Dễ dàng.** Bất kỳ node server nào cũng có thể tự xác thực chữ ký của token một cách độc lập mà không cần đồng bộ bộ nhớ. |
+| **Đăng xuất (Logout) & Thu hồi quyền** | **Rất dễ.** Admin chỉ cần xóa Session trong RAM/Redis là user bị vô hiệu hóa phiên ngay lập tức. | **Phức tạp hơn.** Do token nằm ở client, cần chờ token hết hạn (`exp`) hoặc phải tự triển khai cơ chế Token Blacklist (Redis). |
 
 ---
 
