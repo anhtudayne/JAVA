@@ -313,115 +313,207 @@ graph TD
 > [!NOTE]
 > **Điểm mấu chốt:** Spring Security hoạt động **trước** DispatcherServlet. Nghĩa là nếu request bị chặn bởi Security Filter Chain, nó **không bao giờ** tới được Controller. Đây là nguyên tắc **defense in depth** (bảo vệ nhiều lớp).
 
-### 2.2. Ba lớp kiến trúc chính
+### 2.2. Ba lớp kiến trúc chính & Sự phân hóa giữa 2 mô hình (Truyền thống vs Hiện đại)
+
+Spring Security phân tách hệ thống bảo mật thành 3 tầng trừu tượng độc lập:
 
 ```mermaid
 graph TD
     subgraph L1["Lớp 1: Servlet Filter Integration"]
-        DFP2["DelegatingFilterProxy"]
-        FCP["FilterChainProxy"]
+        DFP2["DelegatingFilterProxy (Cầu nối Servlet ↔ Spring Container)"]
+        FCP["FilterChainProxy (Quản lý các SecurityFilterChain)"]
         DFP2 --> FCP
     end
 
     subgraph L2["Lớp 2: Security Filter Chain"]
         F1["CorsFilter"]
         F2["CsrfFilter"]
-        F3["UsernamePasswordAuthenticationFilter"]
-        F4["BasicAuthenticationFilter"]
-        F5["BearerTokenAuthenticationFilter"]
-        F6["AuthorizationFilter"]
-        F1 --> F2 --> F3 --> F4 --> F5 --> F6
+        F_JWT["JwtAuthenticationFilter (Custom - REST API Hiện đại)"]
+        F3["UsernamePasswordAuthenticationFilter (Form-Login Truyền thống)"]
+        F6["AuthorizationFilter (Kiểm tra quyền truy cập)"]
+        F1 --> F2 --> F_JWT --> F3 --> F6
     end
 
-    subgraph L3["Lớp 3: Core Components"]
-        AM["AuthenticationManager"]
-        AP["AuthenticationProvider"]
-        UDS["UserDetailsService"]
-        PE["PasswordEncoder"]
+    subgraph L3["Lớp 3: Core Authentication Components"]
+        AM["AuthenticationManager (Bộ điều phối xác thực)"]
+        AP["AuthenticationProvider (Logic xác thực thực tế)"]
+        UDS["UserDetailsService (Truy vấn User từ DB)"]
+        PE["PasswordEncoder (So khớp mã băm mật khẩu)"]
         AM --> AP --> UDS
         AP --> PE
     end
 
     FCP --> F1
-    F3 --> AM
 ```
 
-| Lớp | Thành phần | Vai trò |
+| Lớp | Thành phần chính | Vai trò kỹ thuật |
 |:---:|:---|:---|
-| 1 | `DelegatingFilterProxy` → `FilterChainProxy` | Cầu nối giữa Servlet Container và Spring Security |
-| 2 | Chuỗi ~15 Security Filters | Mỗi filter xử lý một khía cạnh bảo mật cụ thể |
-| 3 | `AuthenticationManager`, `AuthenticationProvider`, `UserDetailsService` | Logic xác thực & phân quyền thực sự |
+| **Lớp 1** | `DelegatingFilterProxy` → `FilterChainProxy` | Tiếp nhận request từ Web Server (Tomcat) và chuyển giao vào hệ sinh thái Bean của Spring IoC. |
+| **Lớp 2** | Chuỗi các bộ lọc `SecurityFilterChain` | Chuỗi Filter xử lý tuần tự: kiểm tra nguồn gốc CORS, chống CSRF, trích xuất thông tin định danh và thẩm định quyền hạn. |
+| **Lớp 3** | `AuthenticationManager`, `AuthenticationProvider`, `UserDetailsService`, `PasswordEncoder` | Bộ máy nghiệp vụ xác minh thông tin tài khoản (username/password) dựa trên dữ liệu lưu trữ. |
+
+---
+
+#### ⚖️ Sự khác biệt cốt tử trong cách vận hành 3 lớp giữa 2 mô hình
+
+Nhiều người học thường bị nhầm lẫn vì **sơ đồ kinh điển của Spring Security được thiết kế cho mô hình Web truyền thống**. Trên thực tế, 2 mô hình vận hành 3 lớp này hoàn toàn khác nhau:
+
+```mermaid
+graph TD
+    subgraph TRADITIONAL ["🏛️ MÔ HÌNH 1: KIẾN TRÚC TRUYỀN THỐNG (Form-Login / Session-based)"]
+        T_Req1["1. POST /login (Form data: user/pass)"] --> T_L2["2. UsernamePasswordAuthenticationFilter (Lớp 2)"]
+        T_L2 --> T_L3["3. Tự động kích hoạt AuthenticationManager (Lớp 3)<br/>Query DB qua UserDetailsService & so khớp qua PasswordEncoder"]
+        T_L3 --> T_Session["4. Tạo HttpSession trong RAM Tomcat<br/>& Trả Cookie JSESSIONID về trình duyệt"]
+        
+        T_Req2["5. GET /orders (Kèm Cookie JSESSIONID)"] --> T_ContextFilter["6. SecurityContextHolderFilter<br/>(Lấy Session từ RAM -> Phục hồi SecurityContext)"]
+        T_ContextFilter --> T_Authz["7. AuthorizationFilter (Kiểm tra Role)"]
+    end
+
+    subgraph MODERN ["🚀 MÔ HÌNH 2: KIẾN TRÚC HIỆN ĐẠI (REST API / JWT-based)"]
+        subgraph M_Branch1 ["Nhánh A: Đăng nhập cấp Token (POST /api/auth/login)"]
+            M_Login["1. Client gửi JSON user/pass"] -->|"Đi xuyên qua Filter Chain vì được .permitAll()"| M_Ctrl["2. AuthController (Spring MVC RestController)"]
+            M_Ctrl -->|"Chủ động gọi"| M_AM["3. AuthenticationManager (Lớp 3)"]
+            M_AM --> M_Check["UserDetailsService + PasswordEncoder xác minh"]
+            M_Check -->|"Thành công"| M_JWTGen["4. JwtService: Ký số và sinh JWT Token"]
+            M_JWTGen -->|"Trả về JSON {token: ...}"| M_ClientStore["Client lưu Token vào Memory/LocalStorage"]
+        end
+
+        subgraph M_Branch2 ["Nhánh B: Gọi API Nghiệp vụ (GET /api/orders, DELETE /api/users)"]
+            M_API["1. Client gửi Header: Bearer <Token>"] --> M_JWTFilter["2. JwtAuthenticationFilter (Custom - Lớp 2)"]
+            M_JWTFilter -->|"Bóc tách Token & Verify chữ ký số (0ms, không tốn DB)"| M_Context["3. Nạp User & Roles vào SecurityContextHolder"]
+            M_Context --> M_Authz["4. AuthorizationFilter (Kiểm tra Role/Authority)"]
+            M_Authz --> M_BusinessCtrl["5. Business Controller (OrderController)"]
+        end
+    end
+```
+
+| Tiêu chí phân biệt | Mô hình Truyền thống (Form-Login / Session) | Mô hình Hiện đại (REST API + JWT) |
+| :--- | :--- | :--- |
+| **Kiểu ứng dụng** | Monolith, Server-side Rendering (Spring MVC + Thymeleaf / JSP). | Client-Server tách biệt (React, Vue, Angular, Mobile App) hoặc Microservices. |
+| **Xử lý request đăng nhập** | Do `UsernamePasswordAuthenticationFilter` trong Filter Chain tự động chặn và xử lý. | Đi xuyên qua Filter Chain (nhờ `.permitAll()`) vào thẳng `AuthController`. `AuthController` chủ động gọi `AuthenticationManager` để xác thực và sinh JWT. |
+| **Bộ máy Lớp 3 được gọi khi nào?** | Được gọi tự động bởi Filter Chain mỗi khi có request đăng nhập form. | Được lập trình viên chủ động tiêm (inject) vào Service/Controller để gọi khi đăng nhập. |
+| **Xác thực các request nghiệp vụ sau đó** | Dựa vào Cookie `JSESSIONID` $\rightarrow$ Server tìm `HttpSession` lưu sẵn trong RAM Tomcat. | Dựa vào `Authorization: Bearer <token>` $\rightarrow$ `JwtAuthenticationFilter` tự giải mã chữ ký, không cần truy cập RAM session. |
+| **Vai trò của PasswordEncoder** | So khớp mật khẩu tại Filter Chain khi đăng nhập. | So khớp mật khẩu bên trong logic của `AuthController` / `AuthService`. Các request nghiệp vụ sau đó hoàn toàn không dùng tới `PasswordEncoder`. |
 
 ---
 
 ## 3. Security Filter Chain — Chi Tiết Từng Filter
 
-### 3.1. Thứ tự các Filter quan trọng
+### 3.1. Phân loại các Filter theo Kiến trúc
 
-Spring Security đăng ký khoảng **15+ filter** với thứ tự cố định. Dưới đây là các filter quan trọng nhất:
+Spring Security đăng ký một chuỗi khoảng **15+ filter** với thứ tự cố định. Tùy thuộc vào kiến trúc bạn cấu hình, các filter sẽ đóng các vai trò khác nhau:
 
-| # | Filter | Nhiệm vụ | Quan trọng? |
+| # | Tên Filter | Nhiệm vụ kỹ thuật | Kiến trúc áp dụng |
 |:---:|:---|:---|:---:|
-| 1 | `DisableEncodeUrlFilter` | Ngăn Session ID lọt vào URL | 🟢 |
-| 2 | `WebAsyncManagerIntegrationFilter` | Tích hợp `SecurityContext` vào async request | 🟢 |
-| 3 | `SecurityContextHolderFilter` | Khôi phục `SecurityContext` từ session/token | ⭐⭐ |
-| 4 | `HeaderWriterFilter` | Thêm Security Headers vào response | ⭐ |
-| 5 | **`CorsFilter`** | Xử lý CORS (Cross-Origin) | ⭐⭐ |
-| 6 | **`CsrfFilter`** | Chống tấn công CSRF | ⭐⭐ |
-| 7 | `LogoutFilter` | Xử lý `/logout` | ⭐ |
-| 8 | **`UsernamePasswordAuthenticationFilter`** | Xác thực form login (username + password) | ⭐⭐⭐ |
-| 9 | `BasicAuthenticationFilter` | Xác thực HTTP Basic Auth | ⭐ |
-| 10 | `BearerTokenAuthenticationFilter` | Xác thực JWT Bearer Token (OAuth2) | ⭐⭐⭐ |
-| 11 | `RequestCacheAwareFilter` | Cache request trước redirect | 🟢 |
-| 12 | `SecurityContextHolderAwareRequestFilter` | Wrap `HttpServletRequest` với Security methods | 🟢 |
-| 13 | `AnonymousAuthenticationFilter` | Gán `AnonymousAuthenticationToken` nếu chưa xác thực | ⭐ |
-| 14 | `ExceptionTranslationFilter` | Bắt `AuthenticationException` và `AccessDeniedException` | ⭐⭐⭐ |
-| 15 | **`AuthorizationFilter`** | Kiểm tra quyền truy cập URL | ⭐⭐⭐ |
+| 1 | `DisableEncodeUrlFilter` | Ngăn chặn việc ghi Session ID trực tiếp vào URL (chống lộ session). | Cả 2 |
+| 2 | `WebAsyncManagerIntegrationFilter` | Tích hợp và đồng bộ `SecurityContext` sang các luồng bất đồng bộ (Async Request). | Cả 2 |
+| 3 | `SecurityContextHolderFilter` | Khôi phục `SecurityContext` từ lưu trữ phiên (trong Stateless, bước này tạo context rỗng). | ⭐ Truyền thống (Session) |
+| 4 | `HeaderWriterFilter` | Tự động ghi các HTTP Header bảo mật vào response (X-Frame-Options, X-Content-Type-Options). | Cả 2 |
+| 5 | **`CorsFilter`** | Kiểm tra chính sách chia sẻ tài nguyên nguồn gốc chéo (CORS) cho phép frontend khác domain gọi API. | ⭐⭐ **Bắt buộc trong REST API** |
+| 6 | **`CsrfFilter`** | Kiểm tra CSRF Token để chống tấn công Cross-Site Request Forgery. | ⭐ Truyền thống (REST API thường disable) |
+| 7 | `LogoutFilter` | Xử lý hủy bỏ phiên đăng nhập khi người dùng gọi endpoint `/logout`. | ⭐ Truyền thống (Session) |
+| 8 | **`JwtAuthenticationFilter`** *(Custom)* | Trích xuất chuỗi JWT từ Header `Authorization`, giải mã chữ ký số, lấy Role và nạp vào `SecurityContext`. | ⭐⭐⭐ **Trọng tâm REST API Hiện đại** |
+| 9 | **`UsernamePasswordAuthenticationFilter`** | Bắt request đăng nhập dạng form URL-encoded (`username` + `password`). | ⭐ Truyền thống (Form-Login) |
+| 10 | `BasicAuthenticationFilter` | Xác thực thông qua HTTP Basic Authentication (chuỗi Base64 `user:pass` ở Header). | REST API đơn giản / Internal tool |
+| 11 | `AnonymousAuthenticationFilter` | Nếu request chưa được xác thực qua các filter trước, gán cho nó một danh tính ẩn danh (`anonymousUser`). | Cả 2 |
+| 12 | `ExceptionTranslationFilter` | Bắt các ngoại lệ bảo mật: đổi `AuthenticationException` thành HTTP 401, đổi `AccessDeniedException` thành HTTP 403. | ⭐⭐⭐ Cả 2 |
+| 13 | **`AuthorizationFilter`** | Đánh giá quyền hạn thực tế (Role/Authority) của User đối với URL đang truy cập. | ⭐⭐⭐ Cả 2 |
 
-### 3.2. Luồng xử lý một Request qua Filter Chain
+---
+
+### 3.2. Luồng xử lý một Request qua Filter Chain trong REST API Hiện Đại
+
+Để tránh hiểu nhầm rằng "mọi request đều trải qua việc kiểm tra mật khẩu", chúng ta phân tích độc lập 2 kịch bản xử lý thực tế trong hệ thống REST API + JWT:
+
+#### 🟢 KỊCH BẢN 1: Luồng xử lý Request Đăng Nhập (`POST /api/auth/login`)
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Client
-    participant Cors as CorsFilter
-    participant Csrf as CsrfFilter
-    participant Auth as AuthenticationFilter
-    participant Anon as AnonymousAuthFilter
-    participant Exc as ExceptionTranslation
-    participant Authz as AuthorizationFilter
-    participant DS as DispatcherServlet
+    actor Client as 👤 Client (React / Postman)
+    participant DFP as 🚪 DelegatingFilterProxy
+    participant CORS as 🌐 CorsFilter
+    participant JWTF as 🛡️ JwtAuthenticationFilter
+    participant AUTHZ as 🚪 AuthorizationFilter
+    participant Controller as 🎮 AuthController
+    participant AM as ⚙️ AuthenticationManager
+    participant Provider as 🧩 DaoAuthenticationProvider
+    participant UDS as 📂 UserDetailsService
+    participant PE as 🔑 PasswordEncoder
+    participant JWT as 🎫 JwtService
 
-    Client->>Cors: HTTP Request
-    Cors->>Csrf: ✅ CORS OK
-    Csrf->>Auth: ✅ CSRF OK (hoặc disabled)
+    Client->>DFP: 1. POST /api/auth/login (body: {email, password})
+    DFP->>CORS: Kiểm tra CORS
+    CORS->>JWTF: Đi qua (chưa có Bearer token nên bỏ qua)
+    JWTF->>AUTHZ: Chuyển tiếp
     
-    alt Có credentials (token/username)
-        Auth->>Auth: Xác thực → tạo Authentication
-        Auth->>Authz: SecurityContext chứa Authentication
-    else Không có credentials
-        Auth->>Anon: Bỏ qua
-        Anon->>Authz: SecurityContext chứa AnonymousToken
+    Note over AUTHZ: Cấu hình: .requestMatchers("/api/auth/**").permitAll()<br/>-> Cho phép đi qua tự do, KHÔNG CHẶN!
+    
+    AUTHZ->>Controller: 2. Đến Controller do lập trình viên viết
+    Note over Controller,AM: 3. Controller chủ động kích hoạt quy trình thẩm định:
+    Controller->>AM: authenticate(new UsernamePasswordAuthenticationToken(email, password))
+    AM->>Provider: Điều phối xác thực
+    Provider->>UDS: loadUserByUsername(email) -> Truy vấn DB lấy User
+    Provider->>PE: matches(rawPassword, encodedPassword) -> So khớp BCrypt
+    
+    alt Thông tin ĐÚNG
+        Provider-->>Controller: Xác thực thành công
+        Controller->>JWT: 4. generateToken(user)
+        JWT-->>Controller: Chuỗi JWT Token
+        Controller-->>Client: 5. HTTP 200 OK: {"token": "eyJhbGciOi..."}
+    else Thông tin SAI
+        Provider-->>Controller: Ném BadCredentialsException
+        Controller-->>Client: 5. HTTP 401 Unauthorized (Sai email hoặc mật khẩu)
     end
+```
 
-    alt Có quyền truy cập
-        Authz->>DS: ✅ Request được phép
-        DS->>Client: 200 OK + Response
-    else Chưa xác thực
-        Authz->>Exc: AccessDeniedException
-        Exc->>Client: 401 Unauthorized
-    else Không đủ quyền
-        Authz->>Exc: AccessDeniedException
-        Exc->>Client: 403 Forbidden
+---
+
+#### 🔵 KỊCH BẢN 2: Luồng xử lý Request Nghiệp Vụ Có Kèm JWT (`GET /api/orders`)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as 👤 Client (React / Postman)
+    participant DFP as 🚪 DelegatingFilterProxy
+    participant CORS as 🌐 CorsFilter
+    participant JWTF as 🛡️ JwtAuthenticationFilter (Custom)
+    participant SC as 🧠 SecurityContextHolder
+    participant AUTHZ as 🚪 AuthorizationFilter
+    participant Exc as ⚠️ ExceptionTranslationFilter
+    participant OrderCtrl as 🎮 OrderController
+
+    Client->>DFP: 1. GET /api/orders (Header: Authorization: Bearer <Token>)
+    DFP->>CORS: Kiểm tra CORS (Origin hợp lệ)
+    CORS->>JWTF: Chuyển tiếp request
+    
+    Note over JWTF: 2. Trích xuất Token từ Header Bearer<br/>- Kiểm tra tính hợp lệ chữ ký số (Signature)<br/>- Kiểm tra thời gian hết hạn (exp)<br/>- Trích xuất email & roles (["ROLE_USER"])
+    
+    alt Token HỢP LỆ
+        JWTF->>SC: 3. Nạp Authentication(user, roles) vào SecurityContext
+        JWTF->>AUTHZ: 4. Chuyển tiếp sang AuthorizationFilter
+        
+        Note over AUTHZ: 5. Cấu hình: /api/orders yêu cầu có quyền truy cập.<br/>Soi SecurityContext thấy có User hợp lệ!
+        
+        AUTHZ->>OrderCtrl: 6. Cho phép đi tiếp vào Controller xử lý nghiệp vụ
+        OrderCtrl-->>Client: 7. HTTP 200 OK + Dữ liệu đơn hàng
+        
+    else Token HẾT HẠN hoặc CHỮ KÝ SAI
+        JWTF->>Exc: Ném JwtException
+        Exc-->>Client: ❌ HTTP 401 Unauthorized (Token invalid/expired)
+        
+    else Người dùng KHÔNG ĐỦ QUYỀN (Ví dụ gọi endpoint /api/admin)
+        AUTHZ->>Exc: Ném AccessDeniedException
+        Exc-->>Client: ❌ HTTP 403 Forbidden (Không đủ thẩm quyền truy cập)
     end
 ```
 
 > [!TIP]
-> **Để xem toàn bộ filter chain đang hoạt động**, thêm vào `application.properties`:
-> ```properties
-> logging.level.org.springframework.security=DEBUG
-> ```
-> Spring Security sẽ in ra danh sách filter theo thứ tự khi ứng dụng khởi động.
+> **Điểm mấu chốt cần ghi nhớ:**  
+> Trong Kịch bản 2 (Request nghiệp vụ thông thường):  
+> * Hoàn toàn **không truy vấn lại password trong Database**.  
+> * Hoàn toàn **không dùng tới `PasswordEncoder`**.  
+> * Toàn bộ quá trình xác thực danh tính và phân quyền diễn ra **ngay tại `JwtAuthenticationFilter` trong bộ nhớ RAM** thông qua việc giải mã chữ ký số của token, giúp tối ưu hóa hiệu năng tối đa cho hệ thống.
 
 ---
 
