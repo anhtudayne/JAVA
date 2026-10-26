@@ -47,9 +47,9 @@ Sau khi hoàn thành bài này, bạn sẽ:
 
 > **OAuth2 (Open Authorization 2.0)** là một giao thức chuẩn production cho việc Ủy quyền (Authorization), cho phép một ứng dụng bên thứ 3 truy cập hạn chế vào tài nguyên của người dùng trên một hệ thống khác mà không cần người dùng phải tiết lộ mật khẩu cho ứng dụng đó.
 
-> **OpenID Connect (OIDC)** là một **lớp xác thực** (identity layer) xây dựng **trên nền tảng OAuth2**. Nếu OAuth2 trả lời câu hỏi "**ứng dụng này có quyền truy cập gì?**" thì OIDC trả lời câu hỏi "**người đang đăng nhập là ai?**".
+> **Authorization Server (Máy chủ cấp quyền)**: Chỉ làm nhiệm vụ xác thực danh tính người dùng (kiểm tra username/password, OTP, Google Login) và ký phát hành JWT bằng Private Key. (Ví dụ: Keycloak, Auth0, Okta, hoặc Spring Authorization Server).
 
-> **OAuth2 Resource Server** là một vai trò trong hệ sinh thái OAuth2, nơi **API của bạn** đóng vai trò bảo vệ tài nguyên và **xác thực JWT token** do Authorization Server phát hành. Spring Boot cung cấp module `spring-boot-starter-oauth2-resource-server` để **tự động hóa** toàn bộ quy trình validate JWT theo chuẩn RFC 7519, thay thế hoàn toàn JWT filter tự viết ở Bài 19.
+> **Resource Server (Máy chủ tài nguyên)**: Là các Backend Service chứa dữ liệu nghiệp vụ của bạn (Order Service, Payment Service). Nó không có chức năng đăng nhập và không giữ Private Key. Nó chỉ giữ Public Key để kiểm tra xem tờ JWT mà Client mang tới có đúng là do Authorization Server ký hay không, còn hạn không, và có quyền (Scope/Role) gì..
 
 ### 📊 Bản đồ kiến thức toàn cảnh
 
