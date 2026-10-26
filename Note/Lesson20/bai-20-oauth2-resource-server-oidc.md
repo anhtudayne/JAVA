@@ -57,6 +57,8 @@ Sau khi hoàn thành bài này, bạn sẽ:
 
 > **Client (Ứng dụng khách)** : Ứng dụng muốn xin quyền truy cập dữ liệu của người dùng. Ví dụ như frontend/mobile
 
+> **Lưu ý phân biệt giữa OAuth 2.0 và OpenID Connect (OIDC)** : OAuth 2 là để phân quyền/uỷ quyền, trả về access token. OpenID Connect (OIDC) là lớp Xác thực (Authentication) đắp thêm lên trên OAuth 2.0, ngoài trả về access token, thì Authorization Server còn trả về thêm ID Token chứa các thông tin định danh như Avt, gmail, tên,...
+
 ### 📊 Bản đồ kiến thức toàn cảnh
 
 ```mermaid
