@@ -47,9 +47,15 @@ Sau khi hoàn thành bài này, bạn sẽ:
 
 > **OAuth2 (Open Authorization 2.0)** là một giao thức chuẩn production cho việc Ủy quyền (Authorization), cho phép một ứng dụng bên thứ 3 truy cập hạn chế vào tài nguyên của người dùng trên một hệ thống khác mà không cần người dùng phải tiết lộ mật khẩu cho ứng dụng đó.
 
-> **Authorization Server (Máy chủ cấp quyền)**: Chỉ làm nhiệm vụ xác thực danh tính người dùng (kiểm tra username/password, OTP, Google Login) và ký phát hành JWT bằng Private Key. (Ví dụ: Keycloak, Auth0, Okta, hoặc Spring Authorization Server).
+> **Trong mọi sơ đồ OAuth2, luôn có sự xuất hiện của 4 thành phần** (Ví dụ: Bạn dùng ứng dụng Shopee và bấm nút "Đăng nhập / Liên kết với tài khoản Google")"
 
-> **Resource Server (Máy chủ tài nguyên)**: Là các Backend Service chứa dữ liệu nghiệp vụ của bạn (Order Service, Payment Service). Nó không có chức năng đăng nhập và không giữ Private Key. Nó chỉ giữ Public Key để kiểm tra xem tờ JWT mà Client mang tới có đúng là do Authorization Server ký hay không, còn hạn không, và có quyền (Scope/Role) gì..
+> **Authorization Server (Máy chủ cấp quyền)**: Chỉ làm nhiệm vụ xác thực danh tính người dùng (kiểm tra username/password, OTP, Google Login) và cấp phát JWT token bằng Private Key  sau khi đăng nhập. (Ví dụ: Keycloak, Auth0, Okta, hoặc Spring Authorization Server).
+
+> **Resource Server (Máy chủ tài nguyên)**: Là các Backend Service chứa dữ liệu nghiệp vụ của bạn (Order Service, Payment Service). Nó không có chức năng đăng nhập và không giữ Private Key. Nó chỉ giữ Public Key để kiểm tra xem tờ JWT mà Client mang tới có đúng là do Authorization Server ký hay không, còn hạn không, và có quyền (Scope/Role) gì.
+
+> **Resource Owner (Chủ sở hữu tài nguyên)** : Chính là Người dùng cuối (End-User), người có quyền bấm nút "Đồng ý (Allow)" cho phép chia sẻ dữ liệu của mình.
+
+> **Client (Ứng dụng khách)** : Ứng dụng muốn xin quyền truy cập dữ liệu của người dùng. Ví dụ như frontend/mobile
 
 ### 📊 Bản đồ kiến thức toàn cảnh
 
