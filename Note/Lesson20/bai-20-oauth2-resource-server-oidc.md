@@ -45,7 +45,7 @@ Sau khi hoàn thành bài này, bạn sẽ:
 
 ### 🔑 Các khái niệm then chốt
 
-> **OAuth2 (Open Authorization 2.0)** là một **giao thức ủy quyền** (authorization framework) cho phép ứng dụng bên thứ ba truy cập tài nguyên của người dùng mà **không cần biết mật khẩu** của họ. Hãy hình dung như việc bạn giao chìa khóa hạn chế (token) cho người giúp việc để vào một số phòng nhất định trong nhà, thay vì đưa chìa khóa chính (password).
+> **OAuth2 (Open Authorization 2.0)** là một giao thức chuẩn production cho việc Ủy quyền (Authorization), cho phép một ứng dụng bên thứ 3 truy cập hạn chế vào tài nguyên của người dùng trên một hệ thống khác mà không cần người dùng phải tiết lộ mật khẩu cho ứng dụng đó.
 
 > **OpenID Connect (OIDC)** là một **lớp xác thực** (identity layer) xây dựng **trên nền tảng OAuth2**. Nếu OAuth2 trả lời câu hỏi "**ứng dụng này có quyền truy cập gì?**" thì OIDC trả lời câu hỏi "**người đang đăng nhập là ai?**".
 
